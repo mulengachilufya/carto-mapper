@@ -9,26 +9,26 @@ export default function Home() {
       <Header />
 
       {/* Hero */}
-      <section className="paper-grain border-b border-[--color-line]">
+      <section className="paper-grain border-b border-line">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 lg:grid-cols-2 lg:py-24">
           <div>
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[--color-line] bg-[--color-paper] px-3 py-1 text-xs font-medium text-[--color-muted]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[--color-accent]" />
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-line bg-paper px-3 py-1 text-xs font-medium text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               Cartography, by design — not AI clip-art
             </p>
             <h1 className="font-serif text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
               Turn your data into a publication-quality map in&nbsp;60&nbsp;seconds.
             </h1>
-            <p className="mt-5 max-w-lg text-lg text-[--color-muted]">
+            <p className="mt-5 max-w-lg text-lg text-muted">
               Answer a few questions, drop in your data, and download a print-ready PDF that looks
               like a professional cartographer made it — proper projections, real colour ramps, a
-              legend that makes sense. <span className="text-[--color-ink]">$5 a map.</span>
+              legend that makes sense. <span className="text-ink">$5 a map.</span>
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button href="/create" size="lg">Create my map</Button>
               <Button href="#examples" variant="secondary" size="lg">See examples</Button>
             </div>
-            <p className="mt-4 text-sm text-[--color-muted]">
+            <p className="mt-4 text-sm text-muted">
               $5 per map · 1 free revision included · no account needed
             </p>
           </div>
@@ -49,15 +49,15 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="border-y border-[--color-line] bg-[--color-paper-2]">
+      <section id="how" className="border-y border-line bg-paper-2">
         <div className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
           <SectionHeading eyebrow="How it works" title="Four steps to a finished map" />
           <ol className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s, i) => (
-              <li key={i} className="rounded-xl border border-[--color-line] bg-[--color-paper] p-6">
-                <div className="font-serif text-3xl text-[--color-accent]">{i + 1}</div>
+              <li key={i} className="rounded-xl border border-line bg-paper p-6">
+                <div className="font-serif text-3xl text-accent">{i + 1}</div>
                 <h3 className="mt-3 font-medium">{s.title}</h3>
-                <p className="mt-1.5 text-sm text-[--color-muted]">{s.body}</p>
+                <p className="mt-1.5 text-sm text-muted">{s.body}</p>
               </li>
             ))}
           </ol>
@@ -77,7 +77,7 @@ export default function Home() {
               <Tick />
               <div>
                 <h3 className="font-medium">{p.title}</h3>
-                <p className="mt-1 text-sm text-[--color-muted]">{p.body}</p>
+                <p className="mt-1 text-sm text-muted">{p.body}</p>
               </div>
             </div>
           ))}
@@ -85,7 +85,7 @@ export default function Home() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="border-t border-[--color-line] bg-[--color-paper-2]">
+      <section id="pricing" className="border-t border-line bg-paper-2">
         <div className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
           <SectionHeading eyebrow="Pricing" title="Simple, per-map pricing" />
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -93,7 +93,7 @@ export default function Home() {
             <PriceCard name="3-map pack" price="$12" items={["Three maps — save $3", "1 free revision each", "Use any time"]} />
             <PriceCard name="5-map pack" price="$18" items={["Five maps — save $7", "1 free revision each", "Best for reports & series"]} />
           </div>
-          <p className="mt-6 text-center text-sm text-[--color-muted]">Additional revisions $5 each. No subscription, no account.</p>
+          <p className="mt-6 text-center text-sm text-muted">Additional revisions $5 each. No subscription, no account.</p>
         </div>
       </section>
 
@@ -121,9 +121,9 @@ const PRINCIPLES = [
 function SectionHeading({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
     <div className="max-w-2xl">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[--color-accent]">{eyebrow}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-accent">{eyebrow}</p>
       <h2 className="mt-2 font-serif text-3xl font-semibold tracking-tight">{title}</h2>
-      {sub && <p className="mt-3 text-[--color-muted]">{sub}</p>}
+      {sub && <p className="mt-3 text-muted">{sub}</p>}
     </div>
   );
 }
@@ -144,7 +144,7 @@ function PriceCard({
   return (
     <div
       className={`rounded-2xl border p-7 ${
-        featured ? "border-[--color-accent] bg-[--color-paper] shadow-md" : "border-[--color-line] bg-[--color-paper]"
+        featured ? "border-accent bg-paper shadow-md" : "border-line bg-paper"
       }`}
     >
       <h3 className="font-medium">{name}</h3>

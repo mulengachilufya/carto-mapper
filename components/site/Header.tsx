@@ -3,16 +3,16 @@ import { Button } from "@/components/ui/Button";
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-30 border-b border-[--color-line] bg-[--color-paper]/85 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" className="flex items-center gap-2.5">
           <Compass />
           <span className="font-serif text-lg font-semibold tracking-tight">CartoMapper</span>
         </Link>
-        <nav className="hidden items-center gap-7 text-sm text-[--color-muted] md:flex">
-          <Link href="/#examples" className="hover:text-[--color-ink]">Examples</Link>
-          <Link href="/#how" className="hover:text-[--color-ink]">How it works</Link>
-          <Link href="/#pricing" className="hover:text-[--color-ink]">Pricing</Link>
+        <nav className="hidden items-center gap-7 text-sm text-muted md:flex">
+          <Link href="/#examples" className="hover:text-ink">Examples</Link>
+          <Link href="/#how" className="hover:text-ink">How it works</Link>
+          <Link href="/#pricing" className="hover:text-ink">Pricing</Link>
         </nav>
         <Button href="/create" size="sm">Create my map</Button>
       </div>

@@ -21,7 +21,7 @@ export function QuestionsStep({ industryId, answers, onChange, onBack, onNext }:
   return (
     <div>
       <h2 className="font-serif text-2xl font-semibold tracking-tight">A few quick questions</h2>
-      <p className="mt-1.5 text-[--color-muted]">
+      <p className="mt-1.5 text-muted">
         These shape the map — type, projection, colours and what to show. {industry.name}.
       </p>
 
@@ -57,10 +57,10 @@ function QuestionField({
   return (
     <fieldset>
       <legend className="text-[15px] font-medium">
-        <span className="mr-2 text-[--color-muted]">{index}.</span>
+        <span className="mr-2 text-muted">{index}.</span>
         {question.label}
       </legend>
-      {question.help && <p className="mt-1 text-[13px] text-[--color-muted]">{question.help}</p>}
+      {question.help && <p className="mt-1 text-[13px] text-muted">{question.help}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {question.options.map((opt) => {
           const active = value === opt.value;
@@ -71,8 +71,8 @@ function QuestionField({
               onClick={() => onSelect(opt.value)}
               className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
                 active
-                  ? "border-[--color-accent] bg-[--color-accent] text-white"
-                  : "border-[--color-line] bg-[--color-paper] text-[--color-ink] hover:border-[--color-accent]/50 hover:bg-[--color-paper-2]"
+                  ? "border-accent bg-accent text-white"
+                  : "border-line bg-paper text-ink hover:border-accent/50 hover:bg-paper-2"
               }`}
             >
               {opt.label}

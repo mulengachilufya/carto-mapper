@@ -11,20 +11,20 @@ export function Stepper({ step }: { step: number }) {
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                   state === "done"
-                    ? "bg-[--color-accent] text-white"
+                    ? "bg-accent text-white"
                     : state === "current"
-                      ? "border-2 border-[--color-accent] text-[--color-accent]"
-                      : "border border-[--color-line] text-[--color-muted]"
+                      ? "border-2 border-accent text-accent"
+                      : "border border-line text-muted"
                 }`}
               >
                 {state === "done" ? "✓" : i + 1}
               </span>
-              <span className={`hidden text-sm sm:inline ${state === "todo" ? "text-[--color-muted]" : "text-[--color-ink]"}`}>
+              <span className={`hidden text-sm sm:inline ${state === "todo" ? "text-muted" : "text-ink"}`}>
                 {label}
               </span>
             </div>
             {i < LABELS.length - 1 && (
-              <span className={`mx-3 h-px flex-1 ${i < step ? "bg-[--color-accent]" : "bg-[--color-line]"}`} />
+              <span className={`mx-3 h-px flex-1 ${i < step ? "bg-accent" : "bg-line"}`} />
             )}
           </li>
         );

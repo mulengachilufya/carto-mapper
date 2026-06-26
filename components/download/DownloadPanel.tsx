@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { CartoMap } from "@/components/cartography/CartoMap";
+import { useCountries } from "@/components/cartography/useCountries";
+import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
 import type { MapSpec } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
 
@@ -13,6 +16,8 @@ interface Stash {
 }
 
 export function DownloadPanel() {
+  const { geo } = useCountries("50m");
+  const exportRef = useRef<HTMLDivElement>(null);
   const [stash, setStash] = useState<Stash | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,30 +37,17 @@ export function DownloadPanel() {
   }, []);
 
   async function downloadPdf() {
-    if (!stash) return;
+    const svg = exportRef.current?.querySelector("svg");
+    if (!stash || !svg) {
+      setError("The map isn't ready yet — give it a second and try again.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spec: stash.spec, data: stash.data }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error((j as { error?: string }).error ?? `HTTP ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${stash.title}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await exportSvgToPdf(svg as SVGSVGElement, stash.spec.page, stash.title);
     } catch (e) {
-      setError(
-        `Couldn't render the PDF in this environment (${e instanceof Error ? e.message : "error"}). On a server with Chromium available this runs automatically.`,
-      );
+      setError(`Couldn't generate the PDF (${e instanceof Error ? e.message : "error"}). Please try again.`);
     } finally {
       setBusy(false);
     }
@@ -65,9 +57,9 @@ export function DownloadPanel() {
 
   if (!stash) {
     return (
-      <div className="rounded-2xl border border-[--color-line] bg-[--color-paper] p-8 text-center">
+      <div className="rounded-2xl border border-line bg-paper p-8 text-center">
         <h1 className="font-serif text-2xl font-semibold">We couldn't find your map</h1>
-        <p className="mt-2 text-[--color-muted]">
+        <p className="mt-2 text-muted">
           Maps are tied to the browser tab you created them in. If you've closed it, you can make a new one in a minute.
         </p>
         <div className="mt-6">
@@ -77,24 +69,37 @@ export function DownloadPanel() {
     );
   }
 
+  const pdf = pagePt(stash.spec.page);
+
   return (
-    <div className="rounded-2xl border border-[--color-line] bg-[--color-paper] p-8 text-center shadow-sm">
-      <span className="inline-flex items-center gap-2 rounded-full bg-[--color-accent]/10 px-3 py-1 text-xs font-medium text-[--color-accent-2]">
-        <span className="h-1.5 w-1.5 rounded-full bg-[--color-accent]" />
+    <div className="rounded-2xl border border-line bg-paper p-8 text-center shadow-sm">
+      <span className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         {paid ? "Payment received — thank you!" : "Your map is ready"}
       </span>
       <h1 className="mt-4 font-serif text-3xl font-semibold tracking-tight">{stash.title}</h1>
-      <p className="mt-2 text-[--color-muted]">Download your print-ready PDF below. You can re-download while this tab stays open.</p>
+      <p className="mt-2 text-muted">Download your print-ready PDF below. You can re-download while this tab stays open.</p>
 
       <div className="mt-6 flex flex-col items-center gap-3">
-        <Button onClick={downloadPdf} disabled={busy} size="lg">
-          {busy ? "Preparing your PDF…" : "Download PDF"}
+        <Button onClick={downloadPdf} disabled={busy || !geo} size="lg">
+          {busy ? "Preparing your PDF…" : !geo ? "Loading…" : "Download PDF"}
         </Button>
         {error && <p className="max-w-md text-sm text-red-600">{error}</p>}
         <Button href="/create" variant="ghost">
           Create another map
         </Button>
       </div>
+
+      {/* Hidden, print-font copy used only for client-side PDF export */}
+      {geo && (
+        <div
+          ref={exportRef}
+          aria-hidden
+          style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
+        >
+          <CartoMap spec={stash.spec} data={stash.data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+        </div>
+      )}
     </div>
   );
 }

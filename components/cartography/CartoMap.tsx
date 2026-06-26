@@ -45,6 +45,7 @@ interface Props {
   width: number;
   height: number;
   className?: string;
+  forPdf?: boolean;
 }
 
 type Pt = { x: number; y: number; value: number; category?: string; name?: string };
@@ -250,11 +251,12 @@ function wrapText(text: string, maxChars: number): string[] {
   return lines;
 }
 
-export function CartoMap({ spec, data = [], geo, width, height, className }: Props) {
+export function CartoMap({ spec, data = [], geo, width, height, className, forPdf }: Props) {
   const m = buildMap(spec, data, geo, width, height);
   const f = spec.furniture;
-  const serif = "var(--font-serif, Georgia, 'Times New Roman', serif)";
-  const sans = "var(--font-sans, 'Inter', system-ui, sans-serif)";
+  // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
+  const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
+  const sans = forPdf ? "helvetica" : "var(--font-sans, 'Inter', system-ui, sans-serif)";
   const titleLines = wrapText(spec.title, 38);
 
   return (

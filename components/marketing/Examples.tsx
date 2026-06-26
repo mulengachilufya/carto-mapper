@@ -86,15 +86,15 @@ function divergingWorld(geo: FeatureCollection): Ex {
 
 function Frame({ children, caption }: { children: ReactNode; caption: ReactNode }) {
   return (
-    <figure className="overflow-hidden rounded-xl border border-[--color-line] bg-[--color-paper] shadow-sm">
-      <div className="bg-[--color-paper]">{children}</div>
-      <figcaption className="border-t border-[--color-line] px-4 py-2.5 text-[13px] leading-snug">{caption}</figcaption>
+    <figure className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
+      <div className="bg-paper">{children}</div>
+      <figcaption className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">{caption}</figcaption>
     </figure>
   );
 }
 
 function Skeleton({ ratio = "3 / 2" }: { ratio?: string }) {
-  return <div className="w-full animate-pulse bg-[--color-paper-2]" style={{ aspectRatio: ratio }} />;
+  return <div className="w-full animate-pulse bg-paper-2" style={{ aspectRatio: ratio }} />;
 }
 
 export function FeaturedMap() {
@@ -106,10 +106,10 @@ export function FeaturedMap() {
         geo && ex ? (
           <>
             <span className="font-medium">{ex.label}</span>{" "}
-            <span className="text-[--color-muted]">— {ex.blurb}</span>
+            <span className="text-muted">— {ex.blurb}</span>
           </>
         ) : (
-          <span className="text-[--color-muted]">Rendering a sample map…</span>
+          <span className="text-muted">Rendering a sample map…</span>
         )
       }
     >
@@ -143,7 +143,7 @@ export function ExampleGallery() {
           caption={
             <>
               <span className="font-medium">{ex.label}</span>{" "}
-              <span className="text-[--color-muted]">— {ex.blurb}</span>
+              <span className="text-muted">— {ex.blurb}</span>
             </>
           }
         >

@@ -96,40 +96,6 @@ export function CreateWizard() {
       } catch {
         setError("Couldn't start checkout — check the Stripe keys in your environment.");
       }
-    } else {
-      await downloadPdf();
-    }
-  }
-
-  async function downloadPdf() {
-    if (!spec) return;
-    setGenerating(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spec, data: table?.rows ?? [] }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${spec.title}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(
-        `PDF export needs Chrome available to the server. Use "Download SVG" for now. (${
-          e instanceof Error ? e.message : "error"
-        })`,
-      );
-    } finally {
-      setGenerating(false);
     }
   }
 

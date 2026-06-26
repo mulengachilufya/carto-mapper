@@ -5,6 +5,7 @@ import type { FeatureCollection } from "geojson";
 import { Button } from "@/components/ui/Button";
 import { CartoMap } from "@/components/cartography/CartoMap";
 import { buildNameIndex, matchFeature } from "@/lib/cartography/geo";
+import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
 import { parseMapSpec, type MapSpec, type Furniture } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
 
@@ -33,11 +34,14 @@ const FURNITURE_TOGGLES: { key: keyof Furniture; label: string }[] = [
 
 export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay, revisionsUsed, busy, paymentEnabled }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const landscape = spec.page.orientation === "landscape";
   const W = landscape ? 880 : 620;
   const H = Math.round(landscape ? W / Math.SQRT2 : W * Math.SQRT2);
+  const pdf = pagePt(spec.page);
 
   // For choropleths, how many place names actually matched a country?
   const coverage = useMemo(() => {
@@ -77,6 +81,19 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = async () => {
+    const svg = exportRef.current?.querySelector("svg");
+    if (!svg) return;
+    setExporting(true);
+    try {
+      await exportSvgToPdf(svg as SVGSVGElement, spec.page, slug(spec.title));
+    } catch {
+      /* ignore */
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const applyRevision = () => {
     if (revision.trim()) {
       onRevise(revision.trim());
@@ -87,16 +104,16 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
   return (
     <div>
       <h2 className="font-serif text-2xl font-semibold tracking-tight">Your map</h2>
-      <p className="mt-1.5 text-[--color-muted]">Toggle elements, tweak the page, or ask for a change. Looks good? Get the print-ready PDF.</p>
+      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Get the print-ready PDF.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Map */}
         <div>
-          <div ref={frameRef} className="overflow-hidden rounded-xl border border-[--color-line] bg-[--color-paper] shadow-sm">
+          <div ref={frameRef} className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
             {geo ? (
               <CartoMap spec={spec} data={data} geo={geo} width={W} height={H} className="h-auto w-full" />
             ) : (
-              <div className="aspect-[3/2] w-full animate-pulse bg-[--color-paper-2]" />
+              <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
             )}
           </div>
           {coverage && coverage.matched < coverage.total && (
@@ -143,10 +160,10 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
               onChange={(e) => setRevision(e.target.value)}
               rows={3}
               placeholder='e.g. "make it green", "remove the north arrow", "use natural breaks"'
-              className="w-full resize-none rounded-lg border border-[--color-line] bg-[--color-paper] p-2.5 text-sm outline-none focus:border-[--color-accent] focus:ring-1 focus:ring-[--color-accent]"
+              className="w-full resize-none rounded-lg border border-line bg-paper p-2.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-[--color-muted]">
+              <span className="text-xs text-muted">
                 {revisionsUsed === 0 ? "1 free revision included" : `${revisionsUsed} revision${revisionsUsed > 1 ? "s" : ""} used`}
               </span>
               <Button variant="secondary" size="sm" onClick={applyRevision} disabled={busy || !revision.trim()}>
@@ -161,19 +178,34 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
         <Button onClick={onBack} variant="ghost">← Back</Button>
         <div className="flex items-center gap-3">
           <Button onClick={downloadSvg} variant="secondary">Download SVG</Button>
-          <Button onClick={onPay} size="lg" disabled={busy}>
-            {paymentEnabled ? "Looks good — get my PDF ($5)" : "Looks good — download my PDF"}
+          <Button onClick={paymentEnabled ? onPay : exportPdf} size="lg" disabled={busy || exporting}>
+            {paymentEnabled
+              ? "Looks good — get my PDF ($5)"
+              : exporting
+                ? "Preparing PDF…"
+                : "Looks good — download my PDF"}
           </Button>
         </div>
       </div>
+
+      {/* Hidden, print-font copy used only for client-side PDF export */}
+      {geo && (
+        <div
+          ref={exportRef}
+          aria-hidden
+          style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
+        >
+          <CartoMap spec={spec} data={data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+        </div>
+      )}
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[--color-line] bg-[--color-paper] p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-[--color-muted]">{title}</h3>
+    <div className="rounded-xl border border-line bg-paper p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</h3>
       <div className="mt-3">{children}</div>
     </div>
   );
@@ -183,7 +215,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   return (
     <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between text-sm">
       <span>{label}</span>
-      <span className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-[--color-accent]" : "bg-[--color-line]"}`}>
+      <span className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-accent" : "bg-line"}`}>
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${checked ? "left-[1.125rem]" : "left-0.5"}`} />
       </span>
     </button>
@@ -200,14 +232,14 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex w-full rounded-lg border border-[--color-line] p-0.5">
+    <div className="inline-flex w-full rounded-lg border border-line p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ${
-            value === o.value ? "bg-[--color-accent] text-white" : "text-[--color-muted] hover:text-[--color-ink]"
+            value === o.value ? "bg-accent text-white" : "text-muted hover:text-ink"
           }`}
         >
           {o.label}

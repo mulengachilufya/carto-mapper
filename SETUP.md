@@ -57,15 +57,11 @@ with zero keys (the map spec uses the built-in cartographic rules engine).
 
 ---
 
-## 5. ⚠️ The one caveat: PDF export on Netlify
+## 5. PDF export — done (client-side)
 
-The PDF is currently rendered server‑side with headless Chrome (Puppeteer). That works
-**locally** and on Vercel, but is awkward on Netlify Functions (Chromium size limits).
-
-**Recommended fix (ask me to do it):** move PDF generation **into the browser** with
-`jsPDF` + `svg2pdf.js`. The map is already a clean SVG, so this produces a vector PDF
-client‑side — no server Chrome, works on any host, lower maintenance. The **SVG download
-already works everywhere** as a fallback today.
+PDF export runs **in the browser** (`jsPDF` + `svg2pdf.js`): the map is already a clean SVG,
+so the PDF is built client‑side — no server, no headless Chrome. Works on Netlify (and any
+host) out of the box. (An SVG download is also available in the preview.)
 
 ---
 
@@ -83,7 +79,7 @@ to `.env.local.example` at that point.
 
 ## What's pending (needs you, or a quick task for me)
 - **You:** create Netlify + Stripe (+ later Firebase) accounts and add the env vars above.
-- **Me, on your go:** (a) switch PDF export to client‑side for Netlify, (b) wire Firebase.
+- **Me, on your go:** wire Firebase (Firestore + Storage) for saving jobs / re‑downloads.
 - Deferred: sub‑national (province/district) boundaries — only country‑level geodata is bundled.
 
 See `PROGRESS.md` for the full build status.

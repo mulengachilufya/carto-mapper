@@ -84,16 +84,16 @@ export function DataStep(props: Props) {
   return (
     <div>
       <h2 className="font-serif text-2xl font-semibold tracking-tight">Add your data</h2>
-      <p className="mt-1.5 text-[--color-muted]">Upload a spreadsheet, paste a table, or generate a realistic sample to see how it looks.</p>
+      <p className="mt-1.5 text-muted">Upload a spreadsheet, paste a table, or generate a realistic sample to see how it looks.</p>
 
-      <div className="mt-5 inline-flex rounded-full border border-[--color-line] bg-[--color-paper] p-1">
+      <div className="mt-5 inline-flex rounded-full border border-line bg-paper p-1">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-              tab === t.id ? "bg-[--color-accent] text-white" : "text-[--color-muted] hover:text-[--color-ink]"
+              tab === t.id ? "bg-accent text-white" : "text-muted hover:text-ink"
             }`}
           >
             {t.label}
@@ -106,12 +106,12 @@ export function DataStep(props: Props) {
           <div
             {...getRootProps()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-              isDragActive ? "border-[--color-accent] bg-[--color-paper-2]" : "border-[--color-line] hover:border-[--color-accent]/60"
+              isDragActive ? "border-accent bg-paper-2" : "border-line hover:border-accent/60"
             }`}
           >
             <input {...getInputProps()} />
             <p className="font-medium">Drop a CSV or Excel file here</p>
-            <p className="mt-1 text-sm text-[--color-muted]">or click to browse · first row should be column headers</p>
+            <p className="mt-1 text-sm text-muted">or click to browse · first row should be column headers</p>
           </div>
         )}
 
@@ -122,7 +122,7 @@ export function DataStep(props: Props) {
               onChange={(e) => setPaste(e.target.value)}
               rows={7}
               placeholder={"Country, Value\nKenya, 1200\nUganda, 940\nTanzania, 1530"}
-              className="w-full rounded-xl border border-[--color-line] bg-[--color-paper] p-3.5 font-mono text-sm outline-none focus:border-[--color-accent] focus:ring-1 focus:ring-[--color-accent]"
+              className="w-full rounded-xl border border-line bg-paper p-3.5 font-mono text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
             <div className="mt-2">
               <Button variant="secondary" size="sm" onClick={() => load(parsePastedText(paste), "paste")}>
@@ -133,9 +133,9 @@ export function DataStep(props: Props) {
         )}
 
         {tab === "sample" && (
-          <div className="rounded-xl border border-[--color-line] bg-[--color-paper-2] px-6 py-10 text-center">
+          <div className="rounded-xl border border-line bg-paper-2 px-6 py-10 text-center">
             <p className="font-medium">No data handy? We'll generate a realistic sample.</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-[--color-muted]">
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted">
               Based on your answers — points placed inside the right country, or values across countries.
             </p>
             <div className="mt-4">
@@ -181,7 +181,7 @@ function DataPreview({
   onRolesChange: (r: ColumnRoles) => void;
 }) {
   return (
-    <div className="mt-6 rounded-xl border border-[--color-line] bg-[--color-paper] p-4">
+    <div className="mt-6 rounded-xl border border-line bg-paper p-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{table.rowCount} rows · {table.columns.length} columns</p>
       </div>
@@ -189,7 +189,7 @@ function DataPreview({
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-left text-[13px]">
           <thead>
-            <tr className="border-b border-[--color-line] text-[--color-muted]">
+            <tr className="border-b border-line text-muted">
               {table.columns.map((c) => (
                 <th key={c} className="whitespace-nowrap py-1.5 pr-4 font-medium">{c}</th>
               ))}
@@ -197,9 +197,9 @@ function DataPreview({
           </thead>
           <tbody>
             {table.rows.slice(0, 4).map((row, i) => (
-              <tr key={i} className="border-b border-[--color-line]/60">
+              <tr key={i} className="border-b border-line/60">
                 {table.columns.map((c) => (
-                  <td key={c} className="whitespace-nowrap py-1.5 pr-4 text-[--color-ink]">{String(row[c] ?? "")}</td>
+                  <td key={c} className="whitespace-nowrap py-1.5 pr-4 text-ink">{String(row[c] ?? "")}</td>
                 ))}
               </tr>
             ))}
@@ -210,11 +210,11 @@ function DataPreview({
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {ROLE_FIELDS.map((f) => (
           <label key={f.key} className="text-sm">
-            <span className="text-[--color-muted]">{f.label}</span>
+            <span className="text-muted">{f.label}</span>
             <select
               value={(roles[f.key] as string) ?? ""}
               onChange={(e) => onRolesChange({ ...roles, [f.key]: e.target.value || undefined })}
-              className="mt-1 w-full rounded-lg border border-[--color-line] bg-[--color-paper] px-2.5 py-2 text-sm outline-none focus:border-[--color-accent]"
+              className="mt-1 w-full rounded-lg border border-line bg-paper px-2.5 py-2 text-sm outline-none focus:border-accent"
             >
               <option value="">— none —</option>
               {table.columns.map((c) => (
