@@ -1,0 +1,13 @@
+# Netlify configuration for CartoMapper (Next.js)
+# Netlify auto-detects Next.js and applies its Next.js Runtime — no manual plugin
+# needed in most cases. This file just pins the build command and Node version.
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# If a build ever can't find the Next.js runtime, add the official plugin:
+# [[plugins]]
+#   package = "@netlify/plugin-nextjs"

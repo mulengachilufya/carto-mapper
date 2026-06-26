@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  /* Paper & ink palette — shared by the UI and the map SVG */
+  --paper: #fdfcf8;
+  --paper-2: #f5f3ea;
+  --ink: #23231d;
+  --muted: #6d6a61;
+  --line: #e4e1d7;
+  --accent: #1f5c4d; /* deep cartographic green */
+  --accent-2: #14463a;
+  --gold: #b07d2b;
+
+  /* Font stacks (referenced by the map SVG via var(--font-serif/sans)) */
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Subtle paper grain for hero sections */
+.paper-grain {
+  background-image: radial-gradient(var(--line) 0.5px, transparent 0.5px);
+  background-size: 14px 14px;
+  background-position: -7px -7px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
