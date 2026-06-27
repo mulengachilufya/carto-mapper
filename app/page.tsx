@@ -20,9 +20,9 @@ export default function Home() {
               Turn your data into a publication-quality map in&nbsp;60&nbsp;seconds.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-muted">
-              Answer a few questions, drop in your data, and download a print-ready PDF that looks
-              like a professional cartographer made it — proper projections, real colour ramps, a
-              legend that makes sense. <span className="text-ink">$5 a map.</span>
+              Describe it in a sentence, drop in your data (or a whole report), and download a
+              print-ready PDF that looks like a professional cartographer made it — proper
+              projections, real colour ramps, a legend that makes sense. <span className="text-ink">$5 a map.</span>
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button href="/create" size="lg">Create my map</Button>
@@ -103,10 +103,10 @@ export default function Home() {
 }
 
 const STEPS = [
-  { title: "Pick your industry", body: "Choose from 24 fields — healthcare, NGO, sport, journalism and more." },
-  { title: "Answer a few questions", body: "Five quick choices, plus an optional plain-English description." },
-  { title: "Add or generate data", body: "Upload a CSV/Excel, paste a table, or let us generate a sample." },
-  { title: "Preview & download", body: "Tweak the furniture, pay $5, and download your PDF." },
+  { title: "Describe your map", body: "One prompt — the places, the metric, and the message. Add data if you have it." },
+  { title: "Pick a map type", body: "Choose from a gallery of map types, each with a live sample and a recommendation." },
+  { title: "Brand it", body: "Add your title, organisation, logo, and a caption." },
+  { title: "Preview & download", body: "Tweak, pay $5, and download a print-ready PDF." },
 ];
 
 const PRINCIPLES = [
