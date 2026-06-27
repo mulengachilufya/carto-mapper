@@ -1,4 +1,4 @@
-const LABELS = ["Industry", "Questions", "Data", "Preview"];
+const LABELS = ["Brief", "Map type", "Branding", "Preview"];
 
 export function Stepper({ step }: { step: number }) {
   return (

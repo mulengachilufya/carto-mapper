@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateMapSpecHeuristic, applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
-import { parseMapSpec, type MapSpec } from "@/lib/mapspec/schema";
+import { parseMapSpec, MAP_TYPES, type MapSpec } from "@/lib/mapspec/schema";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -51,6 +51,17 @@ export async function POST(req: Request) {
         : generateMapSpecHeuristic(input);
     engine = "rules";
   }
+
+  // User choices (map type, title, branding) override the engine's guesses.
+  const overrides: Record<string, unknown> = {};
+  if (body.branding && typeof body.branding === "object") overrides.branding = body.branding;
+  if (!revision) {
+    if (typeof body.mapType === "string" && (MAP_TYPES as readonly string[]).includes(body.mapType)) {
+      overrides.mapType = body.mapType;
+    }
+    if (body.title) overrides.title = String(body.title);
+  }
+  if (Object.keys(overrides).length) spec = parseMapSpec({ ...spec, ...overrides });
 
   // User furniture toggles always win over the engine's choices.
   if (body.outputOptions) {

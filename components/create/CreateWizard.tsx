@@ -3,25 +3,52 @@
 import { useState } from "react";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
-import { IndustryStep } from "./IndustryStep";
-import { QuestionsStep } from "./QuestionsStep";
-import { DataStep, type DataMode } from "./DataStep";
+import { BriefStep } from "./BriefStep";
+import { MapTypeStep } from "./MapTypeStep";
+import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
 import { getSessionId } from "@/lib/session";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
 import type { MapSpec } from "@/lib/mapspec/schema";
 
+interface Brand {
+  title: string;
+  organisation: string;
+  logoDataUrl: string | null;
+  notes: string;
+}
+
+function recommendType(roles: ColumnRoles | null, prompt: string): string {
+  const p = prompt.toLowerCase();
+  if (roles?.latField && roles?.lonField) {
+    if (roles.categoryField) return "categorical_point";
+    if (roles.valueField) return "proportional_symbol";
+    return "point";
+  }
+  if (roles?.nameField && roles?.valueField) return "choropleth";
+  if (roles?.nameField) return "footprint";
+  if (/where we work|footprint|presence|reach|member states|countries we/.test(p)) return "footprint";
+  if (/site|location|clinic|office|borehole|facility|where are/.test(p)) return "point";
+  return "choropleth";
+}
+
+function titleFromPrompt(p: string): string {
+  const s = p.trim().replace(/\s+/g, " ");
+  if (!s) return "Untitled Map";
+  const first = s.split(/[.!?\n]/)[0];
+  const words = first.split(" ").slice(0, 8).join(" ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function CreateWizard() {
   const { geo } = useCountries("50m");
   const [step, setStep] = useState(0);
 
-  const [industryId, setIndustryId] = useState<string | null>(null);
-  const [customIndustry, setCustomIndustry] = useState("");
-  const [vibe, setVibe] = useState("");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [prompt, setPrompt] = useState("");
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [roles, setRoles] = useState<ColumnRoles | null>(null);
-  const [, setDataMode] = useState<DataMode | null>(null);
+  const [mapType, setMapType] = useState<string | null>(null);
+  const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -30,6 +57,7 @@ export function CreateWizard() {
   const [error, setError] = useState<string | null>(null);
 
   const paymentEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+  const recommended = recommendType(roles, prompt);
 
   async function generate(opts?: { previousSpec?: MapSpec; revisionRequest?: string }) {
     setGenerating(true);
@@ -39,12 +67,17 @@ export function CreateWizard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          industry: industryId,
-          customIndustry,
-          answers,
-          vibe,
+          industry: "custom",
+          vibe: prompt,
           table,
           roles,
+          mapType,
+          title: brand.title || undefined,
+          branding: {
+            organisation: brand.organisation || undefined,
+            logoDataUrl: brand.logoDataUrl || undefined,
+            notes: brand.notes || undefined,
+          },
           sessionId: getSessionId(),
           jobId,
           previousSpec: opts?.previousSpec,
@@ -77,26 +110,30 @@ export function CreateWizard() {
     }
   }
 
-  async function handlePay() {
+  async function handleCheckout() {
     if (!spec) return;
     stash();
-    if (paymentEnabled) {
-      try {
-        const res = await fetch("/api/stripe/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId, sessionId: getSessionId(), title: spec.title }),
-        });
-        const json = await res.json();
-        if (json.url) {
-          window.location.assign(json.url);
-          return;
-        }
-        throw new Error(json.error ?? "no checkout url");
-      } catch {
-        setError("Couldn't start checkout — check the Stripe keys in your environment.");
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, sessionId: getSessionId(), title: spec.title }),
+      });
+      const json = await res.json();
+      if (json.url) {
+        window.location.assign(json.url);
+        return;
       }
+      throw new Error(json.error ?? "no checkout url");
+    } catch {
+      setError("Couldn't start checkout — check the Stripe keys in your environment.");
     }
+  }
+
+  function startMapType() {
+    setBrand((b) => (b.title ? b : { ...b, title: titleFromPrompt(prompt) }));
+    setMapType((t) => t ?? recommended);
+    setStep(1);
   }
 
   return (
@@ -111,48 +148,40 @@ export function CreateWizard() {
 
       <div className="mt-8">
         {step === 0 && (
-          <IndustryStep
-            industryId={industryId}
-            customIndustry={customIndustry}
-            vibe={vibe}
-            onChange={(patch) => {
-              if (patch.industryId !== undefined) {
-                setIndustryId(patch.industryId);
-                setAnswers({});
-              }
-              if (patch.customIndustry !== undefined) setCustomIndustry(patch.customIndustry);
-              if (patch.vibe !== undefined) setVibe(patch.vibe);
+          <BriefStep
+            geo={geo}
+            prompt={prompt}
+            table={table}
+            roles={roles}
+            onPromptChange={setPrompt}
+            onData={(t, r) => {
+              setTable(t);
+              setRoles(r);
             }}
-            onNext={() => setStep(1)}
+            onNext={startMapType}
           />
         )}
 
-        {step === 1 && industryId && (
-          <QuestionsStep
-            industryId={industryId}
-            answers={answers}
-            onChange={setAnswers}
+        {step === 1 && (
+          <MapTypeStep
+            geo={geo}
+            selected={mapType}
+            recommended={recommended}
+            onSelect={setMapType}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />
         )}
 
-        {step === 2 && industryId && (
-          <DataStep
-            geo={geo}
-            industryId={industryId}
-            answers={answers}
-            vibe={vibe}
-            table={table}
-            roles={roles}
-            onData={(t, r, mode) => {
-              setTable(t);
-              setRoles(r);
-              setDataMode(mode);
-            }}
-            onRolesChange={setRoles}
+        {step === 2 && (
+          <BrandStep
+            title={brand.title}
+            organisation={brand.organisation}
+            logoDataUrl={brand.logoDataUrl}
+            notes={brand.notes}
+            onChange={(patch) => setBrand((b) => ({ ...b, ...patch }))}
             onBack={() => setStep(1)}
-            onNext={() => generate()}
+            onGenerate={() => generate()}
             generating={generating}
           />
         )}
@@ -165,7 +194,7 @@ export function CreateWizard() {
             setSpec={setSpec}
             onRevise={(text) => generate({ previousSpec: spec, revisionRequest: text })}
             onBack={() => setStep(2)}
-            onPay={handlePay}
+            onPay={handleCheckout}
             revisionsUsed={revisionsUsed}
             busy={generating}
             paymentEnabled={paymentEnabled}

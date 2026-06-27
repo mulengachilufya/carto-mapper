@@ -87,9 +87,27 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, width: num
   // Project points either from lat/lon columns or from matched-country centroids.
   const rawPoints = extractPoints(spec, data, nameIndex);
 
+  // Footprint: which drawn regions are highlighted (matched to the user's list).
+  const isFootprint = spec.mapType === "footprint";
+  const footprintMatched = new Set<string>();
+  const footprintFeatures: CountryFeature[] = [];
+  if (isFootprint && spec.data.nameField) {
+    for (const row of data) {
+      const nm = row[spec.data.nameField];
+      if (nm == null) continue;
+      const f = matchFeature(String(nm), nameIndex);
+      if (f) {
+        footprintMatched.add(normalizeName(f.properties.name));
+        footprintFeatures.push(f);
+      }
+    }
+  }
+
   // Decide what to fit the projection to.
   let fitObject: GeoPermissibleObjects;
-  if (level === "world") fitObject = bboxPolygon(-180, -58, 180, 85) as unknown as GeoPermissibleObjects;
+  if (isFootprint && footprintFeatures.length)
+    fitObject = { type: "FeatureCollection", features: footprintFeatures } as unknown as GeoPermissibleObjects;
+  else if (level === "world") fitObject = bboxPolygon(-180, -58, 180, 85) as unknown as GeoPermissibleObjects;
   else if (level === "continent") fitObject = continentBBoxPolygon(region) ?? geo;
   else if (focusFeature) fitObject = focusFeature as unknown as GeoPermissibleObjects;
   else if (rawPoints.length) fitObject = (pointsBBoxPolygon(rawPoints) as unknown as GeoPermissibleObjects) ?? geo;
@@ -135,9 +153,21 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, width: num
     choropleth = { units, breaks, colors, hasNoData };
   }
 
+  // ── Footprint (highlight matched regions) ──
+  let footprint: { units: { d: string; fill: string }[] } | null = null;
+  if (isFootprint) {
+    const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
+    footprint = {
+      units: drawn.map((f) => ({
+        d: pathOf(f as unknown as GeoPermissibleObjects),
+        fill: footprintMatched.has(normalizeName(f.properties.name)) ? accent : THEME.land,
+      })),
+    };
+  }
+
   // ── Base land (context for symbol maps / fallback) ──
   const baseUnits =
-    choropleth === null
+    choropleth === null && !isFootprint
       ? drawn.map((f) => ({
           d: pathOf(f as unknown as GeoPermissibleObjects),
           isFocus: focusFeature ? f === focusFeature : false,
@@ -192,7 +222,7 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, width: num
 
   const scalebar: ScaleBar | null = computeScaleBar(projection, width, height);
 
-  return { choropleth, baseUnits, symbols, symbolLegend, graticulePath, spherePath, showSphere, scalebar };
+  return { choropleth, footprint, baseUnits, symbols, symbolLegend, graticulePath, spherePath, showSphere, scalebar };
 }
 
 function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, CountryFeature>) {
@@ -254,6 +284,7 @@ function wrapText(text: string, maxChars: number): string[] {
 export function CartoMap({ spec, data = [], geo, width, height, className, forPdf }: Props) {
   const m = buildMap(spec, data, geo, width, height);
   const f = spec.furniture;
+  const b = spec.branding;
   // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
   const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
   const sans = forPdf ? "helvetica" : "var(--font-sans, 'Inter', system-ui, sans-serif)";
@@ -297,6 +328,11 @@ export function CartoMap({ spec, data = [], geo, width, height, className, forPd
         <path key={`u${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4}>
           <title>{u.name}</title>
         </path>
+      ))}
+
+      {/* Footprint highlight */}
+      {m.footprint?.units.map((u, i) => (
+        <path key={`fp${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4} />
       ))}
 
       {/* Symbols */}
@@ -351,11 +387,46 @@ export function CartoMap({ spec, data = [], geo, width, height, className, forPd
               {spec.subtitle}
             </text>
           )}
+          {b.organisation && (
+            <text
+              x={MARGIN}
+              y={MARGIN + 18 + titleLines.length * 24 + (spec.subtitle ? 12 : 2)}
+              style={{ fontFamily: sans, letterSpacing: "0.08em" }}
+              fontSize={10.5}
+              fontWeight={600}
+              fill={THEME.muted}
+            >
+              {b.organisation.toUpperCase()}
+            </text>
+          )}
         </g>
       )}
 
+      {/* Logo */}
+      {b.logoDataUrl && (
+        <image
+          href={b.logoDataUrl}
+          x={width - MARGIN - 52}
+          y={MARGIN}
+          width={52}
+          height={52}
+          preserveAspectRatio="xMidYMid meet"
+        />
+      )}
+
       {/* North arrow */}
-      {f.north_arrow && <NorthArrow x={width - MARGIN - 16} y={MARGIN + 12} />}
+      {f.north_arrow && <NorthArrow x={width - MARGIN - 16} y={MARGIN + 12 + (b.logoDataUrl ? 58 : 0)} />}
+
+      {/* Branding notes */}
+      {b.notes && (
+        <g style={{ fontFamily: sans }}>
+          {wrapText(b.notes, 95).map((line, i) => (
+            <text key={i} x={MARGIN} y={height - MARGIN - 14 + i * 11} fontSize={9} fill={THEME.muted}>
+              {line}
+            </text>
+          ))}
+        </g>
+      )}
 
       {/* Scale bar */}
       {f.scalebar && m.scalebar && (

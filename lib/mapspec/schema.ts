@@ -9,6 +9,7 @@ import { z } from "zod";
 
 export const MAP_TYPES = [
   "choropleth", // filled regions coloured by a value
+  "footprint", // highlight selected regions/countries on a clean canvas
   "proportional_symbol", // circles sized by a value, at points/centroids
   "graduated_symbol", // circles sized + coloured by class
   "dot", // one dot per record (density)
@@ -111,6 +112,15 @@ export const MapSpecSchema = z.object({
       orientation: z.enum(ORIENTATIONS).default("landscape"),
     })
     .default({ size: "A4", orientation: "landscape" }),
+
+  // User branding — title is above; these sit on the map.
+  branding: z
+    .object({
+      organisation: z.string().optional(),
+      logoDataUrl: z.string().optional(), // data: URL of an uploaded logo
+      notes: z.string().optional(), // article / caption text the user wrote or we generated
+    })
+    .default({}),
 
   notes: z.string().optional(), // human-readable rationale
 });

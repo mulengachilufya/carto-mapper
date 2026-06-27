@@ -79,12 +79,9 @@ export function matchFeature(
   if (index.has(n)) return index.get(n);
   const alias = ALIASES[n];
   if (alias && index.has(alias)) return index.get(alias);
-  // Loose containment (guarded to avoid silly partial hits).
-  if (n.length >= 4) {
-    for (const [k, f] of index) {
-      if (k.includes(n) || n.includes(k)) return f;
-    }
-  }
+  // No fuzzy "contains" matching — it mis-assigns (e.g. "Niger" → "Nigeria",
+  // "Sudan" → "South Sudan"). A miss is safe (renders as "no data"); a wrong
+  // match silently paints your value onto the wrong country.
   return undefined;
 }
 
