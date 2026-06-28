@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
-import { BriefStep } from "./BriefStep";
+import { BriefStep, type ContextFile } from "./BriefStep";
 import { MapTypeStep } from "./MapTypeStep";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
@@ -49,6 +49,8 @@ export function CreateWizard() {
   const [roles, setRoles] = useState<ColumnRoles | null>(null);
   const [mapType, setMapType] = useState<string | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
+  const [files, setFiles] = useState<ContextFile[]>([]);
+  const [extracting, setExtracting] = useState(false);
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -130,7 +132,33 @@ export function CreateWizard() {
     }
   }
 
-  function startMapType() {
+  async function startMapType() {
+    setError(null);
+    // Read uploaded reports/articles/images (and a prompt with no structured data) with Claude.
+    const needsExtract = files.length > 0 || (prompt.trim().length >= 3 && !table);
+    if (needsExtract) {
+      setExtracting(true);
+      try {
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, files }),
+        });
+        if (res.ok) {
+          const ex = await res.json();
+          if (ex.table && ex.roles) {
+            setTable(ex.table as ParsedTable);
+            setRoles(ex.roles as ColumnRoles);
+          }
+          if (ex.title) setBrand((b) => (b.title ? b : { ...b, title: String(ex.title) }));
+          if (ex.mapType) setMapType((t) => t ?? String(ex.mapType));
+        }
+      } catch {
+        /* extraction is best-effort */
+      } finally {
+        setExtracting(false);
+      }
+    }
     setBrand((b) => (b.title ? b : { ...b, title: titleFromPrompt(prompt) }));
     setMapType((t) => t ?? recommended);
     setStep(1);
@@ -153,12 +181,15 @@ export function CreateWizard() {
             prompt={prompt}
             table={table}
             roles={roles}
+            files={files}
             onPromptChange={setPrompt}
             onData={(t, r) => {
               setTable(t);
               setRoles(r);
             }}
+            onFilesChange={setFiles}
             onNext={startMapType}
+            extracting={extracting}
           />
         )}
 

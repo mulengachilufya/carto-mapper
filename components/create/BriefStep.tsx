@@ -13,14 +13,23 @@ import {
 } from "@/lib/data/parse";
 import { generateSample } from "@/lib/data/sample";
 
+export interface ContextFile {
+  name: string;
+  mediaType: string;
+  dataBase64: string;
+}
+
 interface Props {
   geo: FeatureCollection | null;
   prompt: string;
   table: ParsedTable | null;
   roles: ColumnRoles | null;
+  files: ContextFile[];
   onPromptChange: (p: string) => void;
   onData: (table: ParsedTable | null, roles: ColumnRoles | null) => void;
+  onFilesChange: (files: ContextFile[]) => void;
   onNext: () => void;
+  extracting?: boolean;
 }
 
 const ROLE_FIELDS: { key: keyof ColumnRoles; label: string }[] = [
@@ -33,7 +42,16 @@ const ROLE_FIELDS: { key: keyof ColumnRoles; label: string }[] = [
 
 type Tab = "upload" | "paste" | "sample";
 
-export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, onNext }: Props) {
+function readBase64(file: File): Promise<ContextFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, mediaType: file.type || "application/octet-stream", dataBase64: String(reader.result).split(",")[1] ?? "" });
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, onData, onFilesChange, onNext, extracting }: Props) {
   const [tab, setTab] = useState<Tab>("upload");
   const [paste, setPaste] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -47,23 +65,29 @@ export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, o
     onData(t, inferColumns(t));
   };
 
-  const onDrop = async (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    const name = file.name.toLowerCase();
-    if (name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".txt")) {
-      try {
-        load(await parseSpreadsheetFile(file));
-      } catch {
-        setNote("Couldn't read that file.");
+  const onDrop = async (accepted: File[]) => {
+    for (const file of accepted) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        try {
+          load(await parseSpreadsheetFile(file));
+        } catch {
+          setNote("Couldn't read that spreadsheet.");
+        }
+      } else {
+        // report / article / image / sample work → kept for the AI to read on generate.
+        try {
+          const cf = await readBase64(file);
+          onFilesChange([...files, cf]);
+          setNote(null);
+        } catch {
+          setNote("Couldn't read that file.");
+        }
       }
-    } else {
-      // PDF / Word / etc. — full document reading arrives with AI extraction (next update).
-      setNote(`Got "${file.name}". Reading full reports (PDF/Word) turns on with AI extraction — coming next. For now use the prompt, a CSV/Excel, or paste.`);
     }
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: true });
 
   const makeSample = () => {
     if (!geo) return;
@@ -72,22 +96,24 @@ export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, o
     onData(t, r);
   };
 
+  const canContinue = prompt.trim().length >= 3 || !!table || files.length > 0;
+
   return (
     <div>
       <h2 className="font-serif text-2xl font-semibold tracking-tight">Describe the map you want</h2>
-      <p className="mt-1.5 text-muted">One or two sentences. Add data if you have it — or let us generate a sample.</p>
+      <p className="mt-1.5 text-muted">Tell us as much as you can — the more context you give, the better the map.</p>
 
       <div className="mt-5 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">
-        <span className="font-semibold text-accent-2">Tip — mention three things:</span>{" "}
-        <span className="text-ink">the <strong>places</strong>, the <strong>metric</strong>, and the <strong>message</strong>.</span>
-        <span className="block text-muted">e.g. &ldquo;Show our 7 project districts in Zambia&apos;s Copperbelt, shaded by number of beneficiaries, for a donor report.&rdquo;</span>
+        <span className="font-semibold text-accent-2">Mention as much as you can —</span>{" "}
+        <span className="text-ink">the <strong>places</strong>, the <strong>metric</strong>, the <strong>message</strong>, the audience, and any styling you want.</span>
+        <span className="block text-muted">e.g. &ldquo;Show our 7 project districts in Zambia&apos;s Copperbelt, shaded by number of beneficiaries, for a donor report — clean and editorial.&rdquo;</span>
       </div>
 
       <textarea
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
-        rows={4}
-        placeholder="Describe your map…"
+        rows={5}
+        placeholder="Describe your map in as much detail as you like…"
         className="mt-4 w-full resize-none rounded-xl border border-line bg-paper p-4 text-[15px] outline-none focus:border-accent focus:ring-1 focus:ring-accent"
       />
 
@@ -108,13 +134,16 @@ export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, o
         {tab === "upload" && (
           <div
             {...getRootProps()}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-9 text-center transition-colors ${
               isDragActive ? "border-accent bg-paper-2" : "border-line hover:border-accent/60"
             }`}
           >
             <input {...getInputProps()} />
-            <p className="font-medium">Drop a file here</p>
-            <p className="mt-1 text-sm text-muted">CSV or Excel read instantly · reports (PDF/Word) once extraction is on</p>
+            <p className="font-medium">Drop files here</p>
+            <p className="mt-1 max-w-md text-sm text-muted">
+              Data (CSV/Excel), a report or article (PDF/Word/text), or a <strong>picture</strong> — we&apos;ll read it.
+              Got <strong>sample work</strong>? Add it for context. Optional.
+            </p>
           </div>
         )}
 
@@ -143,6 +172,24 @@ export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, o
         )}
       </div>
 
+      {files.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {files.map((file, i) => (
+            <span key={i} className="inline-flex items-center gap-2 rounded-full border border-line bg-paper px-3 py-1 text-sm">
+              <span className="max-w-[200px] truncate">{file.name}</span>
+              <button
+                type="button"
+                onClick={() => onFilesChange(files.filter((_, j) => j !== i))}
+                className="text-muted hover:text-ink"
+                aria-label="Remove file"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {note && <p className="mt-3 text-sm text-amber-700">{note}</p>}
 
       {table && roles && (
@@ -169,7 +216,9 @@ export function BriefStep({ geo, prompt, table, roles, onPromptChange, onData, o
       )}
 
       <div className="mt-8 flex justify-end">
-        <Button onClick={onNext} disabled={prompt.trim().length < 3 && !table} size="lg">Continue</Button>
+        <Button onClick={onNext} disabled={!canContinue || extracting} size="lg">
+          {extracting ? "Reading your files…" : "Continue"}
+        </Button>
       </div>
     </div>
   );
