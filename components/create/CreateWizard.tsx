@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
@@ -57,6 +57,14 @@ export function CreateWizard() {
   const [generating, setGenerating] = useState(false);
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [creditedBanner, setCreditedBanner] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("credited") === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time init from the URL on mount
+      setCreditedBanner(true);
+    }
+  }, []);
 
   const paymentEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
   const recommended = recommendType(roles, prompt);
@@ -115,11 +123,28 @@ export function CreateWizard() {
   async function handleCheckout() {
     if (!spec) return;
     stash();
+    const sessionId = getSessionId();
     try {
+      // A pack credit on this session? Spend it and skip Stripe entirely.
+      const creditRes = await fetch(`/api/credits?sessionId=${encodeURIComponent(sessionId)}`);
+      const creditJson = (await creditRes.json()) as { remaining?: number };
+      if (jobId && (creditJson.remaining ?? 0) > 0) {
+        const consumeRes = await fetch("/api/credits/consume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, jobId }),
+        });
+        if (consumeRes.ok) {
+          window.location.assign(`/download?job=${encodeURIComponent(jobId)}&paid=1`);
+          return;
+        }
+        // Fall through to normal checkout if the credit spend lost a race.
+      }
+
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, sessionId: getSessionId(), title: spec.title }),
+        body: JSON.stringify({ jobId, sessionId, title: spec.title }),
       });
       const json = await res.json();
       if (json.url) {
@@ -167,6 +192,12 @@ export function CreateWizard() {
   return (
     <div>
       <Stepper step={step} />
+
+      {creditedBanner && (
+        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
+          Pack purchased — your credits are ready. Build a map below and checkout will skip straight to download.
+        </p>
+      )}
 
       {error && (
         <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">

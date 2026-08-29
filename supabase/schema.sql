@@ -38,12 +38,19 @@ create table if not exists credit_purchases (
   session_id text not null,
   email text,
   stripe_payment_intent_id text,
+  stripe_checkout_session_id text, -- guards the webhook against double-crediting on retry
   credits_purchased integer,
   credits_remaining integer,
   pack_type text -- single | triple | five
 );
 
+-- If you already ran this file before pack purchases existed, run this once:
+-- alter table credit_purchases add column if not exists stripe_checkout_session_id text;
+
 create index if not exists credit_purchases_session_idx on credit_purchases (session_id);
+create unique index if not exists credit_purchases_checkout_idx
+  on credit_purchases (stripe_checkout_session_id)
+  where stripe_checkout_session_id is not null;
 
 -- ─── Storage bucket for generated PDFs ───────────────────────
 -- Private bucket; we hand out short-lived signed URLs from the server.

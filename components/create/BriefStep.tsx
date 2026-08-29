@@ -42,6 +42,21 @@ const ROLE_FIELDS: { key: keyof ColumnRoles; label: string }[] = [
 
 type Tab = "upload" | "paste" | "sample";
 
+const PASTE_EXAMPLES: { label: string; sample: string }[] = [
+  {
+    label: "Regions + value",
+    sample: "District, Beneficiaries\nKitwe, 1200\nNdola, 940\nLuanshya, 610",
+  },
+  {
+    label: "Facilities (lat/lon)",
+    sample: "Facility, Lat, Lon, Patients\nKitwe Central Clinic, -12.8024, 28.2132, 340\nNdola General, -12.9587, 28.6366, 512",
+  },
+  {
+    label: "Categories",
+    sample: "Site, Status\nKitwe Depot, Active\nNdola Hub, Planned\nSolwezi Yard, Active",
+  },
+];
+
 function readBase64(file: File): Promise<ContextFile> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -149,13 +164,33 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
 
         {tab === "paste" && (
           <div>
+            <p className="mb-3 text-sm text-muted">
+              Paste anything with a header row — countries, districts, facilities, whatever you&apos;re mapping. We
+              auto-detect names, values, coordinates, and categories from your headers, so it doesn&apos;t need to
+              look like the example below.
+            </p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {PASTE_EXAMPLES.map((ex) => (
+                <button
+                  key={ex.label}
+                  type="button"
+                  onClick={() => setPaste(ex.sample)}
+                  className="rounded-full border border-line bg-paper px-3 py-1 text-xs text-muted transition-colors hover:border-accent/60 hover:text-ink"
+                >
+                  {ex.label}
+                </button>
+              ))}
+            </div>
             <textarea
               value={paste}
               onChange={(e) => setPaste(e.target.value)}
               rows={6}
-              placeholder={"Country, Value\nKenya, 1200\nUganda, 940"}
+              placeholder={PASTE_EXAMPLES[0].sample}
               className="w-full rounded-xl border border-line bg-paper p-3.5 font-mono text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
+            <p className="mt-1.5 text-xs text-muted">
+              Also works pasted straight from Excel or Google Sheets (tab-separated) — no need to reformat first.
+            </p>
             <div className="mt-2">
               <Button variant="secondary" size="sm" onClick={() => load(parsePastedText(paste))}>Use this data</Button>
             </div>
