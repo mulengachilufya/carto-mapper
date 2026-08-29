@@ -25,9 +25,27 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const jobId = session.metadata?.jobId;
+    const meta = session.metadata ?? {};
+    const packType = meta.packType ?? "single";
     const sb = getServiceSupabase();
-    if (sb && jobId) {
+
+    if (sb && packType !== "single") {
+      // Standalone pack purchase — credit the session, not a specific job.
+      // The unique index on stripe_checkout_session_id makes this safe to
+      // retry: a duplicate webhook delivery just hits a conflict and no-ops.
+      try {
+        await sb.from("credit_purchases").insert({
+          session_id: meta.sessionId ?? "",
+          stripe_payment_intent_id: String(session.payment_intent ?? ""),
+          stripe_checkout_session_id: session.id,
+          credits_purchased: Number(meta.credits ?? 0),
+          credits_remaining: Number(meta.credits ?? 0),
+          pack_type: packType,
+        });
+      } catch (e) {
+        console.error("webhook: pack credit insert failed (likely a safe duplicate)", e);
+      }
+    } else if (sb && meta.jobId) {
       try {
         await sb
           .from("map_jobs")
@@ -36,7 +54,7 @@ export async function POST(req: Request) {
             stripe_payment_intent_id: String(session.payment_intent ?? ""),
             stripe_checkout_session_id: session.id,
           })
-          .eq("id", jobId);
+          .eq("id", meta.jobId);
       } catch (e) {
         console.error("webhook: job update failed", e);
       }

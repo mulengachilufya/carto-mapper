@@ -84,12 +84,46 @@ function divergingWorld(geo: FeatureCollection): Ex {
   };
 }
 
-function Frame({ children, caption }: { children: ReactNode; caption: ReactNode }) {
+function Frame({
+  children,
+  caption,
+  plate,
+}: {
+  children: ReactNode;
+  caption: ReactNode;
+  plate?: string;
+}) {
   return (
-    <figure className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
-      <div className="bg-paper">{children}</div>
-      <figcaption className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">{caption}</figcaption>
+    <figure className="group relative overflow-hidden rounded-[3px] bg-paper p-2 shadow-[0_18px_40px_-16px_rgba(0,0,0,0.45)] ring-1 ring-room-line">
+      <div className="overflow-hidden rounded-[2px] bg-paper">{children}</div>
+      <RegCorner pos="tl" />
+      <RegCorner pos="tr" />
+      <RegCorner pos="bl" />
+      <RegCorner pos="br" />
+      <figcaption className="flex items-baseline justify-between gap-3 px-1 pb-1 pt-2.5 text-[13px] leading-snug">
+        <span>
+          {plate && <span className="mr-2 font-mono-tight text-[10px] uppercase tracking-wider text-accent-2">{plate}</span>}
+          {caption}
+        </span>
+      </figcaption>
     </figure>
+  );
+}
+
+function RegCorner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
+  const pose: Record<string, string> = {
+    tl: "top-1 left-1",
+    tr: "top-1 right-1 -scale-x-100",
+    bl: "bottom-8 left-1 -scale-y-100",
+    br: "bottom-8 right-1 -scale-100",
+  };
+  return (
+    <span className={`reg-mark ${pose[pos]}`} style={{ color: "var(--color-accent)" }} aria-hidden>
+      <svg viewBox="0 0 15 15" fill="none">
+        <path d="M0.5 6V0.5H6" stroke="currentColor" strokeWidth="1" />
+        <circle cx="0.5" cy="0.5" r="1" fill="currentColor" />
+      </svg>
+    </span>
   );
 }
 
@@ -102,6 +136,7 @@ export function FeaturedMap() {
   const ex = useMemo(() => (geo ? worldChoropleth(geo) : null), [geo]);
   return (
     <Frame
+      plate="Plate I"
       caption={
         geo && ex ? (
           <>
@@ -140,6 +175,7 @@ export function ExampleGallery() {
       {examples.map((ex, i) => (
         <Frame
           key={i}
+          plate={`Plate ${["II", "III", "IV", "V"][i] ?? i + 2}`}
           caption={
             <>
               <span className="font-medium">{ex.label}</span>{" "}

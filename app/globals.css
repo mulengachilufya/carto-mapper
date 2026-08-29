@@ -1,19 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  /* Paper & ink palette — shared by the UI and the map SVG */
+  /* Paper & ink — the printed page. Used by the map SVG and the /create wizard,
+     where you're looking at an actual light-coloured map preview and need real contrast. */
   --paper: #fdfcf8;
   --paper-2: #f5f3ea;
   --ink: #23231d;
   --muted: #6d6a61;
   --line: #e4e1d7;
-  --accent: #1f5c4d; /* deep cartographic green */
+  --accent: #1f5c4d; /* deep cartographic green — "verified data" */
   --accent-2: #14463a;
   --gold: #b07d2b;
 
-  /* Font stacks (referenced by the map SVG via var(--font-serif/sans)) */
+  /* The room — the dark ground the marketing site sits on. Paper plates get
+     mounted on top of this, like prints on a museum wall. */
+  --room: #14120f;
+  --room-2: #1c1914;
+  --room-3: #242019;
+  --room-line: rgba(224, 201, 156, 0.14);
+  --brass: #c9a15a;
+  --brass-2: #8a6a34;
+  --brass-soft: rgba(201, 161, 90, 0.5);
+  --parchment-muted: #b7ac97;
+
+  /* Font stacks */
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 @theme inline {
@@ -25,8 +38,18 @@
   --color-accent: var(--accent);
   --color-accent-2: var(--accent-2);
   --color-gold: var(--gold);
+
+  --color-room: var(--room);
+  --color-room-2: var(--room-2);
+  --color-room-3: var(--room-3);
+  --color-room-line: var(--room-line);
+  --color-brass: var(--brass);
+  --color-brass-2: var(--brass-2);
+  --color-parchment-muted: var(--parchment-muted);
+
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
 }
 
 body {
@@ -39,13 +62,123 @@ body {
   font-family: var(--font-serif);
 }
 
-/* Subtle paper grain for hero sections */
+.font-mono-tight {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle paper grain for light hero/section backgrounds (wizard, cards) */
 .paper-grain {
   background-image: radial-gradient(var(--line) 0.5px, transparent 0.5px);
   background-size: 14px 14px;
   background-position: -7px -7px;
 }
 
+/* Fine film grain for dark sections — cheap SVG noise, no image asset */
+.film-grain {
+  position: relative;
+  isolation: isolate;
+}
+.film-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* ── Duotone photography ───────────────────────────────────────
+   Every photo on the dark site gets the same ink→brass treatment so 14
+   mixed-source images read as one deliberate print series, not a stock dump. */
+.duotone {
+  position: relative;
+  overflow: hidden;
+  background: var(--room-2);
+}
+.duotone img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.12) brightness(0.92);
+}
+.duotone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--room) 0%, var(--brass-2) 52%, var(--brass) 100%);
+  mix-blend-mode: color;
+  opacity: 0.92;
+}
+.duotone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20, 18, 15, 0) 40%, rgba(20, 18, 15, 0.85) 100%);
+}
+
+/* ── Registration marks ────────────────────────────────────────
+   Print-alignment ticks, borrowed from the actual craft of platemaking.
+   Used sparingly: only on "plate" objects (framed maps, archive photos),
+   never on ambient backdrop imagery. */
+.reg-mark {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+  color: var(--brass);
+  opacity: 0.85;
+}
+.reg-mark svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+}
+
+/* ── Scroll reveal ──────────────────────────────────────────────
+   Toggled by the <Reveal> client component via data-in="true". */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal[data-in="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Ambient hero motion ──────────────────────────────────────── */
+@keyframes ken-burns {
+  from {
+    transform: scale(1.06) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.16) translate3d(-1%, -1%, 0);
+  }
+}
+.ken-burns {
+  animation: ken-burns 26s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .ken-burns {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
 }
