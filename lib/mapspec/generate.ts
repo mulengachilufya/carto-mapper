@@ -11,6 +11,8 @@ export interface GenerateInput {
   table?: ParsedTable | null;
   roles?: ColumnRoles;
   outputOptions?: Partial<MapSpec["furniture"]>;
+  /** Where the data resolver placed the data (e.g. admin1 of Kenya). */
+  geography?: { level: GeoLevel; region?: string };
 }
 
 // ─── Place detection (lightweight gazetteer) ─────────────────

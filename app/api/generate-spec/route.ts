@@ -7,6 +7,7 @@ import { advanceJob, getJob, isLocalJobId } from "@/lib/jobs";
 import { isPaid, PAID_REVISIONS_INCLUDED } from "@/lib/workflow";
 
 export const runtime = "nodejs";
+// The AI designer answers within ~22 s (then falls back to the rules engine).
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
     table: (body.table as GenerateInput["table"]) ?? null,
     roles: (body.roles as GenerateInput["roles"]) ?? {},
     outputOptions: body.outputOptions as Partial<MapSpec["furniture"]> | undefined,
+    geography:
+      body.geography && (GEO_LEVELS as readonly string[]).includes(String((body.geography as { level?: string }).level))
+        ? (body.geography as GenerateInput["geography"])
+        : undefined,
   };
 
   const revision = body.previousSpec
@@ -36,9 +41,12 @@ export async function POST(req: Request) {
 
   let spec: MapSpec;
   let engine: "claude" | "rules" = "rules";
+  let rationale: unknown = null;
   try {
     if (hasAnthropic()) {
-      spec = await generateMapSpecWithClaude(input, revision);
+      const design = await generateMapSpecWithClaude(input, revision);
+      spec = design.spec;
+      rationale = design.rationale;
       engine = "claude";
     } else if (revision?.revisionRequest && revision.previousSpec) {
       spec = applyRevisionHeuristic(revision.previousSpec, revision.revisionRequest);
@@ -68,8 +76,11 @@ export async function POST(req: Request) {
       overrides.geography = { ...spec.geography, level: g.level, region: g.region ?? spec.geography.region };
       // Furniture conventions follow the (now known) scale: no scale bar on a world map,
       // no graticule on a country map.
-      const small = g.level === "world" || g.level === "continent";
-      overrides.furniture = { ...spec.furniture, scalebar: !small, north_arrow: g.level !== "world", graticule: small };
+      // The AI designer already chose furniture knowing the geography; the rules engine didn't.
+      if (engine === "rules") {
+        const small = g.level === "world" || g.level === "continent";
+        overrides.furniture = { ...spec.furniture, scalebar: !small, north_arrow: g.level !== "world", graticule: small };
+      }
     }
   }
   if (Object.keys(overrides).length) spec = parseMapSpec({ ...spec, ...overrides });
@@ -130,5 +141,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ spec, jobId, engine, newJob });
+  return NextResponse.json({ spec, jobId, engine, newJob, rationale });
 }

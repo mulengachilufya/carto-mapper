@@ -11,7 +11,7 @@ import { PreviewStep } from "./PreviewStep";
 import { getSessionId } from "@/lib/session";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
 import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
-import type { Resolution } from "@/lib/data/resolve";
+import { resolvePlaces, type Resolution } from "@/lib/data/resolve";
 
 interface Brand {
   title: string;
@@ -234,8 +234,14 @@ export function CreateWizard() {
         if (res.ok) {
           const ex = await res.json();
           if (ex.table && ex.roles) {
-            setTable(ex.table as ParsedTable);
-            setRoles(ex.roles as ColumnRoles);
+            // Run what the AI read through the same place resolver as pasted data:
+            // geocode the towns and find the geography (e.g. the districts of Uganda).
+            const res2 = geo
+              ? await resolvePlaces(ex.table as ParsedTable, ex.roles as ColumnRoles, { geo, prompt }).catch(() => null)
+              : null;
+            setTable(res2?.table ?? (ex.table as ParsedTable));
+            setRoles(res2?.roles ?? (ex.roles as ColumnRoles));
+            setResolution(res2);
           }
           if (ex.title) setBrand((b) => (b.title ? b : { ...b, title: String(ex.title) }));
           if (ex.mapType) setMapType((t) => t ?? String(ex.mapType));

@@ -1,8 +1,30 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { z } from "zod";
 import mammoth from "mammoth";
 import type { ParsedTable, ColumnRoles, Row } from "@/lib/data/parse";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "claude-opus-5";
+const FALLBACK_MODEL = "claude-opus-4-8";
+const FALLBACK_BETA = "server-side-fallback-2026-06-01";
+
+/** What we read out of the customer's documents, validated before it's used. */
+const ExtractedSchema = z.object({
+  title: z.string().describe("Short editorial map title; empty string if unclear."),
+  region: z.string().describe('Overall area: a country, a region like "East Africa", or "World"; empty string if unclear.'),
+  suggestedMapType: z.enum(["choropleth", "footprint", "proportional_symbol", "categorical_point", "dot", "point"]),
+  valueLabel: z.string().describe("Label for the metric with its unit; empty string if there is no metric."),
+  places: z.array(
+    z.object({
+      name: z.string(),
+      value: z.number().nullable().describe("The number stated in the source for this place, or null. Never invent one."),
+      category: z.string().nullable(),
+      lat: z.number().nullable().describe("Only for specific small places not easily found by name (villages, sites); else null."),
+      lon: z.number().nullable(),
+    }),
+  ),
+  summary: z.string().describe("One sentence on what was found, and anything ambiguous."),
+});
 
 export interface ContextFile {
   name: string;
@@ -36,27 +58,20 @@ interface Extracted {
   summary?: string;
 }
 
-const SYSTEM = `You read a user's request plus any attached reports, articles, tables, or images, and extract the geographic + statistical information needed to draw ONE map.
+const SYSTEM = `You read a customer's request and whatever they attached — reports, articles, spreadsheets exported to PDF, photos of printed tables, screenshots of old maps — and pull out the places and numbers needed to draw ONE map.
 
-Return ONLY a JSON object (no prose, no code fences):
-{
-  "title": short editorial map title,
-  "region": overall area (a country, a continent, or "World") if clear, else omit,
-  "suggestedMapType": one of ["choropleth","footprint","proportional_symbol","categorical_point","dot","point"],
-  "valueLabel": short label for the metric, if any,
-  "places": [ { "name": string, "value"?: number, "category"?: string, "lat"?: number, "lon"?: number } ],
-  "summary": one sentence on what you found
-}
-
-Rules:
-- Include every place you can identify. For SPECIFIC places (cities, towns, sites, districts) include approximate "lat"/"lon" from your knowledge. For whole countries/regions, omit lat/lon and give the country/region name.
-- Choose suggestedMapType: values per country/region → "choropleth"; a list of countries to highlight → "footprint"; located sites with a count → "proportional_symbol"; located sites by type → "categorical_point"; just locations → "point".
-- Use real numbers from the source for "value" where present; never invent data that isn't there.
-- If you find no places, return "places": [].`;
+- List every place the map should show, with its name as the source writes it (keep official names: "Copperbelt Province", "Nairobi County", "Kano State").
+- Values: use only numbers stated in the source for that place, in the source's units; if a place has no number, leave value null. Never estimate or invent data.
+- Categories: a short label when the source classifies places (e.g. "Hospital", "Planned", "Phase 2").
+- Coordinates: our system already knows countries, provinces, districts and ~7,000 towns by name, so leave lat/lon null for those. Give approximate lat/lon only for small or specific sites it could not find by name (a village, a borehole, a named farm).
+- Region: the overall area — the country the places are in, a region such as "East Africa", or "World".
+- suggestedMapType: values per country/region → choropleth; regions to highlight without values → footprint; sites with a count → proportional_symbol; sites by type → categorical_point; just locations → point.
+- If the attachments contain no places, return an empty places list and say so in the summary.`;
 
 export async function extractMapData(prompt: string, files: ContextFile[]): Promise<ExtractResult> {
   if (!process.env.ANTHROPIC_API_KEY) return { table: null, roles: null };
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // Serverless time budget: answer within ~22 s or let the rest of the flow continue without it.
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 22_000, maxRetries: 0 });
 
   const content: Anthropic.Messages.ContentBlockParam[] = [];
   if (prompt?.trim()) content.push({ type: "text", text: `User's request: ${prompt}` });
@@ -89,11 +104,34 @@ export async function extractMapData(prompt: string, files: ContextFile[]): Prom
     }
   }
 
-  content.push({ type: "text", text: "Extract the mappable information now and return ONLY the JSON object." });
+  content.push({ type: "text", text: "Extract the mappable information now." });
 
-  const resp = await client.messages.create({ model: MODEL, max_tokens: 2500, system: SYSTEM, messages: [{ role: "user", content }] });
-  const text = resp.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
-  return buildResult(extractJson(text));
+  const resp = await client.beta.messages.parse({
+    model: MODEL,
+    max_tokens: 16000,
+    betas: [FALLBACK_BETA],
+    fallbacks: [{ model: FALLBACK_MODEL }],
+    thinking: { type: "adaptive" },
+    output_config: { effort: "medium", format: betaZodOutputFormat(ExtractedSchema) },
+    system: SYSTEM,
+    messages: [{ role: "user", content }],
+  });
+  if (resp.stop_reason === "refusal" || !resp.parsed_output) return { table: null, roles: null };
+  const d = resp.parsed_output;
+  return buildResult({
+    title: d.title || undefined,
+    region: d.region || undefined,
+    suggestedMapType: d.suggestedMapType,
+    valueLabel: d.valueLabel || undefined,
+    summary: d.summary,
+    places: d.places.map((p) => ({
+      name: p.name,
+      value: p.value ?? undefined,
+      category: p.category ?? undefined,
+      lat: p.lat ?? undefined,
+      lon: p.lon ?? undefined,
+    })),
+  });
 }
 
 function buildResult(d: Extracted): ExtractResult {
@@ -130,17 +168,4 @@ function buildResult(d: Extracted): ExtractResult {
   if (hasCat) roles.categoryField = "category";
 
   return { table: { columns, rows, rowCount: rows.length }, roles, ...meta };
-}
-
-function extractJson(text: string): Extracted {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1] : text;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1) return {};
-  try {
-    return JSON.parse(raw.slice(start, end + 1)) as Extracted;
-  } catch {
-    return {};
-  }
 }
