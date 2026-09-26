@@ -3,14 +3,14 @@
 :root {
   /* Paper & ink — the printed page. Used by the map SVG and the /create wizard,
      where you're looking at an actual light-coloured map preview and need real contrast. */
-  --paper: #fdfcf8;
-  --paper-2: #f5f3ea;
-  --ink: #23231d;
-  --muted: #6d6a61;
-  --line: #e4e1d7;
-  --accent: #1f5c4d; /* deep cartographic green — "verified data" */
-  --accent-2: #14463a;
-  --gold: #b07d2b;
+  --paper: #fbf8f0;
+  --paper-2: #efe6d2;
+  --ink: #1c1a17;
+  --muted: #5f584d;
+  --line: #ddd2bb;
+  --accent: #2f6a9e; /* atlas ocean blue */
+  --accent-2: #10263d;
+  --gold: #c68a3a;
 
   /* Font stacks */
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;

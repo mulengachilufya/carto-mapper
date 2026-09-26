@@ -319,7 +319,8 @@ function buildMap(
   const colorForCat = (c?: string) => catColors[Math.max(0, cats.indexOf(c || "Other")) % catColors.length];
   const seq = getPaletteColors(spec.symbology.palette, 7, spec.symbology.reverse);
   const symbolFill = spec.symbology.paletteKind === "qualitative" ? seq[0] : seq[5];
-  const pointR = spec.mapType === "dot" ? 2.6 * k : 4.2 * k;
+  // The user's own sites must out-rank the reference towns on atlas styles.
+  const pointR = spec.mapType === "dot" ? 2.6 * k : (spec.style === "minimal" ? 4.2 : 5.4) * k;
   const radiusOf = (v: number) => (proportional ? Math.max(minR, rScale(Math.abs(v))) : pointR);
 
   // ── Legend content ──
@@ -985,7 +986,7 @@ export function CartoMap({
             fill={s.fill}
             fillOpacity={s.r > 6 * k ? 0.78 : 0.95}
             stroke={THEME.symbolStroke}
-            strokeWidth={(m.style === "minimal" ? 0.7 : 0.9) * k}
+            strokeWidth={(m.style === "minimal" ? 0.7 : 1.4) * k}
           >
             {s.name && <title>{s.name}</title>}
           </circle>

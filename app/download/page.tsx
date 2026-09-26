@@ -8,8 +8,8 @@ export default function DownloadPage() {
   return (
     <>
       <Header />
-      <main className="mx-auto flex w-full max-w-2xl flex-1 items-center px-5 py-16">
-        <div className="w-full">
+      <main className="atlas-grain flex flex-1 items-center bg-atlas-paper">
+        <div className="mx-auto w-full max-w-2xl px-5 py-16">
           <DownloadPanel />
         </div>
       </main>

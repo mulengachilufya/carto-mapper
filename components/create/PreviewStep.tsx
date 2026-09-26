@@ -25,12 +25,19 @@ interface Props {
 
 const FURNITURE_TOGGLES: { key: keyof Furniture; label: string }[] = [
   { key: "title", label: "Title" },
+  { key: "labels", label: "Place names" },
   { key: "legend", label: "Legend" },
   { key: "scalebar", label: "Scale bar" },
   { key: "north_arrow", label: "North arrow" },
   { key: "graticule", label: "Graticule" },
   { key: "caption", label: "Caption" },
   { key: "source", label: "Source line" },
+];
+
+const STYLES: { id: MapSpec["style"]; label: string; hint: string }[] = [
+  { id: "atlas", label: "Atlas", hint: "Relief & rivers" },
+  { id: "classic", label: "Classic", hint: "Political pastels" },
+  { id: "minimal", label: "Minimal", hint: "Paper & ink" },
 ];
 
 export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay, revisionsUsed, busy, paymentEnabled }: Props) {
@@ -99,7 +106,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
   return (
     <div>
-      <h2 className="font-serif text-2xl font-semibold tracking-tight">Your map</h2>
+      <h2 className="display text-4xl font-semibold text-ink">Your map</h2>
       <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Get the print-ready PDF.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -121,6 +128,24 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
         {/* Controls */}
         <aside className="space-y-6">
+          <Panel title="Style">
+            <div className="grid grid-cols-3 gap-2">
+              {STYLES.map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setSpec(parseMapSpec({ ...spec, style: st.id }))}
+                  className={`rounded-lg border px-2 py-2 text-left text-sm transition-colors ${
+                    spec.style === st.id ? "border-accent bg-accent/10 text-ink" : "border-line text-muted hover:border-accent/50 hover:text-ink"
+                  }`}
+                >
+                  <span className="block font-medium">{st.label}</span>
+                  <span className="block text-[11px] leading-tight opacity-80">{st.hint}</span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
           <Panel title="Map elements">
             <div className="space-y-2">
               {FURNITURE_TOGGLES.map((t) => (

@@ -21,8 +21,13 @@ export interface RegionJoin {
 }
 
 // Words people add to subdivision names that the boundary data usually omits.
-const GENERIC = /\b(province|provincia|region|state|district|county|governorate|prefecture|municipality|department|division|oblast|of)\b/g;
+const GENERIC = /\b(province|provincia|region|state|district|county|city|governorate|prefecture|municipality|department|division|oblast|of)\b/g;
 const strip = (n: string) => n.replace(GENERIC, " ").replace(/\s+/g, " ").trim();
+
+/** Name matcher for a set of provinces/districts (tolerates "Province", "State", hyphens…). */
+export function subdivisionMatcher(fc: FeatureCollection) {
+  return subdivisionIndex(fc);
+}
 
 function subdivisionIndex(fc: FeatureCollection) {
   const exact = new Map<string, CountryFeature>();

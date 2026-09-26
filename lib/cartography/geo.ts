@@ -238,6 +238,24 @@ type SubdivisionIndex = Record<string, { iso: string; levels: number[] }>;
 let subdivisionIndex: Promise<SubdivisionIndex> | null = null;
 const subdivisionCache = new Map<string, Promise<FeatureCollection | undefined>>();
 
+function subdivisionIndexOnce(baseUrl: string) {
+  subdivisionIndex ??= fetch(`${baseUrl}/geodata/subdivisions/index.json`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  return subdivisionIndex;
+}
+
+/** ISO3 code for a country name as used in countries-50m.json ("Dem. Rep. Congo" → "COD"). */
+export async function countryIso(countryName: string, baseUrl = ""): Promise<string | undefined> {
+  return (await subdivisionIndexOnce(baseUrl))[countryName]?.iso;
+}
+
+/** Country name (as in countries-50m.json) for an ISO3 code. */
+export async function countryByIso(iso: string, baseUrl = ""): Promise<string | undefined> {
+  const idx = await subdivisionIndexOnce(baseUrl);
+  return Object.keys(idx).find((name) => idx[name].iso === iso);
+}
+
 /**
  * Load a country's ADM1 (provinces/states) or ADM2 (districts) boundaries, built
  * from geoBoundaries by scripts/build-subdivisions.mjs. `countryName` is the name
@@ -250,12 +268,9 @@ export function loadSubdivisions(
 ): Promise<FeatureCollection | undefined> {
   const key = `${countryName}|${level}`;
   if (!subdivisionCache.has(key)) {
-    subdivisionIndex ??= fetch(`${baseUrl}/geodata/subdivisions/index.json`)
-      .then((r) => (r.ok ? r.json() : {}))
-      .catch(() => ({}));
     subdivisionCache.set(
       key,
-      subdivisionIndex.then(async (idx) => {
+      subdivisionIndexOnce(baseUrl).then(async (idx) => {
         const entry = idx[countryName];
         if (!entry?.levels.includes(level)) return undefined;
         const res = await fetch(`${baseUrl}/geodata/subdivisions/${entry.iso}-${level}.json`);

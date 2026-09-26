@@ -18,7 +18,7 @@ interface Props {
 export function MapTypeStep({ geo, selected, recommended, onSelect, onBack, onNext }: Props) {
   return (
     <div>
-      <h2 className="font-serif text-2xl font-semibold tracking-tight">Choose your map type</h2>
+      <h2 className="display text-4xl font-semibold text-ink">Choose your map type</h2>
       <p className="mt-1.5 text-muted">
         Each is a real cartographic technique with its own job. We&apos;ve highlighted a recommendation — pick whatever fits.
       </p>

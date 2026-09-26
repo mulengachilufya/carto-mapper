@@ -9,7 +9,8 @@ import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
 import { getSessionId } from "@/lib/session";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
-import type { MapSpec } from "@/lib/mapspec/schema";
+import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
+import type { Resolution } from "@/lib/data/resolve";
 
 interface Brand {
   title: string;
@@ -18,8 +19,13 @@ interface Brand {
   notes: string;
 }
 
-function recommendType(roles: ColumnRoles | null, prompt: string): string {
+function recommendType(roles: ColumnRoles | null, prompt: string, resolution: Resolution | null): string {
   const p = prompt.toLowerCase();
+  // Region names (countries, provinces, districts) → shade them; sites → mark them.
+  const kind = resolution?.reading.kind;
+  if (kind === "countries" || kind === "provinces" || kind === "districts") {
+    return roles?.valueField ? "choropleth" : "footprint";
+  }
   if (roles?.latField && roles?.lonField) {
     if (roles.categoryField) return "categorical_point";
     if (roles.valueField) return "proportional_symbol";
@@ -32,12 +38,30 @@ function recommendType(roles: ColumnRoles | null, prompt: string): string {
   return "choropleth";
 }
 
-function titleFromPrompt(p: string): string {
-  const s = p.trim().replace(/\s+/g, " ");
-  if (!s) return "Untitled Map";
-  const first = s.split(/[.!?\n]/)[0];
-  const words = first.split(" ").slice(0, 8).join(" ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+const titleCase = (s: string) =>
+  s
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\w\S*/g, (w, i: number) => (i > 0 && /^(of|and|by|in|the|per|for|a|an)$/i.test(w) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1)));
+
+/**
+ * A map title the way an atlas would print it. With data: "Schools by County, Kenya"
+ * from the value and place columns. Otherwise the prompt, trimmed of the audience
+ * ("…, for a donor report") and politely capitalised.
+ */
+function titleFromData(prompt: string, roles: ColumnRoles | null, resolution: Resolution | null): string {
+  const region = resolution?.region && resolution.region !== "World" ? resolution.region.replace("United States of America", "United States") : undefined;
+  const generic = /^(value|values|count|total|number|column \d+|place|name)$/i;
+  if (roles?.valueField && roles.nameField && !generic.test(roles.valueField)) {
+    const unit = generic.test(roles.nameField)
+      ? { countries: "Country", provinces: "Province", districts: "District", towns: "Site", coordinates: "Site" }[resolution?.reading.kind ?? "towns"]
+      : roles.nameField.replace(/s$/i, "");
+    return `${titleCase(roles.valueField)} by ${titleCase(unit)}${region && resolution?.level !== "world" ? `, ${region}` : ""}`;
+  }
+  const s = prompt.trim().replace(/\s+/g, " ").split(/[.!?\n]/)[0].replace(/,?\s+(for|in order to|to be used in|to use in)\s+(a|an|the|our|my)\b.*$/i, "");
+  if (!s) return region ? `Map of ${region}` : "Untitled Map";
+  return titleCase(s.split(" ").slice(0, 10).join(" "));
 }
 
 export function CreateWizard() {
@@ -50,6 +74,8 @@ export function CreateWizard() {
   const [mapType, setMapType] = useState<string | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
   const [files, setFiles] = useState<ContextFile[]>([]);
+  // Where the data says the map is (e.g. "the counties of Kenya"), found by the resolver.
+  const [resolution, setResolution] = useState<Resolution | null>(null);
   const [extracting, setExtracting] = useState(false);
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
@@ -67,7 +93,10 @@ export function CreateWizard() {
   }, []);
 
   const paymentEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-  const recommended = recommendType(roles, prompt);
+  const recommended = recommendType(roles, prompt, resolution);
+  const geography: { level: GeoLevel; region?: string } | undefined = resolution
+    ? { level: resolution.level, region: resolution.region }
+    : undefined;
 
   async function generate(opts?: { previousSpec?: MapSpec; revisionRequest?: string }) {
     setGenerating(true);
@@ -82,6 +111,7 @@ export function CreateWizard() {
           table,
           roles,
           mapType,
+          geography,
           title: brand.title || undefined,
           branding: {
             organisation: brand.organisation || undefined,
@@ -184,7 +214,7 @@ export function CreateWizard() {
         setExtracting(false);
       }
     }
-    setBrand((b) => (b.title ? b : { ...b, title: titleFromPrompt(prompt) }));
+    setBrand((b) => (b.title ? b : { ...b, title: titleFromData(prompt, roles, resolution) }));
     setMapType((t) => t ?? recommended);
     setStep(1);
   }
@@ -214,9 +244,10 @@ export function CreateWizard() {
             roles={roles}
             files={files}
             onPromptChange={setPrompt}
-            onData={(t, r) => {
+            onData={(t, r, res) => {
               setTable(t);
               setRoles(r);
+              setResolution(res);
             }}
             onFilesChange={setFiles}
             onNext={startMapType}

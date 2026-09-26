@@ -289,9 +289,8 @@ function buildTitle(o: {
 }
 
 function buildSubtitle(answers: Record<string, string>, industryName?: string): string {
-  const parts: string[] = [];
-  if (industryName) parts.push(industryName);
-  return parts.join(" · ");
+  // "Custom / Other" is our bucket, not something to print on someone's map.
+  return industryName && !/custom|other/i.test(industryName) ? industryName : "";
 }
 
 function cleanSubject(label: string): string {

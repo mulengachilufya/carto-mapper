@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateMapSpecHeuristic, applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
-import { parseMapSpec, MAP_TYPES, type MapSpec } from "@/lib/mapspec/schema";
+import { parseMapSpec, MAP_TYPES, GEO_LEVELS, type MapSpec } from "@/lib/mapspec/schema";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -60,6 +60,15 @@ export async function POST(req: Request) {
       overrides.mapType = body.mapType;
     }
     if (body.title) overrides.title = String(body.title);
+    // Where the data itself says the map is (resolved from the user's places) beats a guess.
+    const g = body.geography as { level?: string; region?: string } | undefined;
+    if (g && (GEO_LEVELS as readonly string[]).includes(String(g.level))) {
+      overrides.geography = { ...spec.geography, level: g.level, region: g.region ?? spec.geography.region };
+      // Furniture conventions follow the (now known) scale: no scale bar on a world map,
+      // no graticule on a country map.
+      const small = g.level === "world" || g.level === "continent";
+      overrides.furniture = { ...spec.furniture, scalebar: !small, north_arrow: g.level !== "world", graticule: small };
+    }
   }
   if (Object.keys(overrides).length) spec = parseMapSpec({ ...spec, ...overrides });
 
