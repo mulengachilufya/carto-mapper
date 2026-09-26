@@ -19,10 +19,14 @@ create table if not exists map_jobs (
   map_spec jsonb,
   svg_output text,
   pdf_url text,
-  status text default 'draft', -- draft | generating | preview | paid | complete | failed
+  status text default 'draft', -- see lib/workflow.ts: draft | preview | checkout | paid | delivered | expired | refunded | failed
   stripe_payment_intent_id text,
   stripe_checkout_session_id text,
   revision_count integer default 0,
+  paid_revisions_used integer default 0, -- changes made after payment (lib/workflow.ts PAID_REVISIONS_INCLUDED)
+  email text,                            -- from Stripe Checkout, for receipts and support
+  paid_at timestamptz,
+  delivered_at timestamptz,
   revision_of uuid references map_jobs(id),
   output_options jsonb default '{"title": true, "legend": true, "scalebar": true, "north_arrow": true, "caption": false, "source": true}'
 );
@@ -31,7 +35,15 @@ create index if not exists map_jobs_session_idx on map_jobs (session_id);
 create index if not exists map_jobs_status_idx on map_jobs (status);
 create index if not exists map_jobs_checkout_idx on map_jobs (stripe_checkout_session_id);
 
--- ─── Credit packs (future / optional) ────────────────────────
+-- If you created map_jobs before the payment workflow (lib/workflow.ts), run once:
+-- alter table map_jobs add column if not exists paid_revisions_used integer default 0;
+-- alter table map_jobs add column if not exists email text;
+-- alter table map_jobs add column if not exists paid_at timestamptz;
+-- alter table map_jobs add column if not exists delivered_at timestamptz;
+-- update map_jobs set status = 'checkout' where status = 'generating';
+-- update map_jobs set status = 'delivered' where status = 'complete';
+
+-- ─── Credit packs ────────────────────────────────────────────
 create table if not exists credit_purchases (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz default now(),

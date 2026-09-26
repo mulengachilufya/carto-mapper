@@ -114,7 +114,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
         <div>
           <div ref={frameRef} className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
             {geo ? (
-              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} className="h-auto w-full" />
+              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} watermark="Preview · CartoMapper" className="h-auto w-full" />
             ) : (
               <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
             )}
@@ -185,7 +185,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-muted">
-                {revisionsUsed === 0 ? "1 free revision included" : `${revisionsUsed} revision${revisionsUsed > 1 ? "s" : ""} used`}
+                {revisionsUsed === 0 ? "Unlimited while previewing" : `${revisionsUsed} change${revisionsUsed > 1 ? "s" : ""} made`}
               </span>
               <Button variant="secondary" size="sm" onClick={applyRevision} disabled={busy || !revision.trim()}>
                 {busy ? "Working…" : "Apply"}
@@ -197,16 +197,24 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <Button onClick={onBack} variant="ghost">← Back</Button>
-        <div className="flex items-center gap-3">
-          <Button onClick={downloadSvg} variant="secondary">Download SVG</Button>
-          <Button onClick={paymentEnabled ? onPay : exportPdf} size="lg" disabled={busy || exporting}>
-            {paymentEnabled
-              ? "Looks good — get my PDF ($5)"
-              : exporting
-                ? "Preparing PDF…"
-                : "Looks good — download my PDF"}
-          </Button>
-        </div>
+        {paymentEnabled ? (
+          <div className="flex flex-col items-end gap-1.5">
+            <Button onClick={onPay} size="lg" disabled={busy}>
+              Looks good — get the clean print files ($5)
+            </Button>
+            <span className="text-xs text-muted">Vector PDF + SVG, no watermark · secure checkout by Stripe</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-3">
+              <Button onClick={downloadSvg} variant="secondary">Watermarked SVG</Button>
+              <Button onClick={exportPdf} size="lg" disabled={busy || exporting}>
+                {exporting ? "Preparing PDF…" : "Download watermarked PDF"}
+              </Button>
+            </div>
+            <span className="text-xs text-muted">Payments aren&apos;t switched on for this site yet, so downloads carry a preview mark.</span>
+          </div>
+        )}
       </div>
 
       {/* Hidden, print-font copy used only for client-side PDF export */}
@@ -216,7 +224,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
           aria-hidden
           style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
         >
-          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
+          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} watermark="Preview · CartoMapper" forPdf />
         </div>
       )}
     </div>

@@ -1,4 +1,6 @@
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { advanceJob, getJob } from "@/lib/jobs";
+import { isPaid } from "@/lib/workflow";
 
 /** Sum of unused credits across every pack this session has bought. */
 export async function getRemainingCredits(sessionId: string): Promise<number> {
@@ -25,6 +27,11 @@ export async function consumeCredit(sessionId: string, jobId: string): Promise<b
   const sb = getServiceSupabase();
   if (!sb || !sessionId || !jobId) return false;
 
+  // Never spend a credit on a map that's already paid for.
+  const job = await getJob(jobId);
+  if (!job) return false;
+  if (isPaid(job.status)) return true;
+
   const { data: rows, error } = await sb
     .from("credit_purchases")
     .select("id, credits_remaining")
@@ -45,8 +52,8 @@ export async function consumeCredit(sessionId: string, jobId: string): Promise<b
 
   if (debitErr || !debited || debited.length === 0) return false;
 
-  const { error: jobErr } = await sb.from("map_jobs").update({ status: "paid" }).eq("id", jobId);
-  if (jobErr) {
+  const paid = await advanceJob(jobId, "paid", { paid_at: new Date().toISOString() });
+  if (!paid.ok) {
     // Couldn't mark the job paid — put the credit back.
     await sb.from("credit_purchases").update({ credits_remaining: row.credits_remaining }).eq("id", row.id);
     return false;

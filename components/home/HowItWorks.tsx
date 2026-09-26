@@ -15,17 +15,17 @@ const STEPS = [
   {
     gate: "Free",
     title: "Preview and refine",
-    body: "See the finished map before paying. Switch style, page size or orientation, toggle map elements, and ask for a change in plain words — one revision is on us.",
+    body: "See the finished map before paying. Switch style, page size or orientation, toggle map elements, and ask for changes in plain words — as many as you like. Previews carry a light watermark.",
   },
   {
     gate: "$5",
     title: "Pay once, only when you love it",
-    body: "Secure checkout by Stripe. No account, no subscription. Packs bring the price down for a series.",
+    body: "Secure checkout by Stripe removes the watermark. No account, no subscription; packs bring the price down for a series.",
   },
   {
     gate: "Yours",
     title: "Download print-ready files",
-    body: "A vector PDF at A4 or Letter for print and an SVG for your designer — with your title, organisation, logo and source line.",
+    body: "A vector PDF at A4 or Letter for print and an SVG for your designer. Come back any time to download again; one change after purchase is included.",
   },
 ];
 

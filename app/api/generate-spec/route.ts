@@ -3,6 +3,8 @@ import { generateMapSpecHeuristic, applyRevisionHeuristic, type GenerateInput } 
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
 import { parseMapSpec, MAP_TYPES, GEO_LEVELS, type MapSpec } from "@/lib/mapspec/schema";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { advanceJob, getJob, isLocalJobId } from "@/lib/jobs";
+import { isPaid, PAID_REVISIONS_INCLUDED } from "@/lib/workflow";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -80,22 +82,29 @@ export async function POST(req: Request) {
     });
   }
 
-  // Best-effort persistence (skipped entirely when Supabase isn't configured).
+  // Persistence + the revision gate (skipped entirely when Supabase isn't configured).
+  //  • unpaid maps: any number of changes while previewing
+  //  • paid maps:   PAID_REVISIONS_INCLUDED change(s) stay on the paid job; after that a
+  //                 change becomes a new map (a new, unpaid job) — the paid one is kept.
   let jobId: string | null = (body.jobId as string) ?? null;
+  let newJob = false;
   const sb = getServiceSupabase();
   if (sb) {
     try {
-      if (jobId) {
+      const existing = jobId && !isLocalJobId(jobId) ? await getJob(jobId) : null;
+      if (existing && isPaid(existing.status) && existing.paid_revisions_used < PAID_REVISIONS_INCLUDED) {
         await sb
           .from("map_jobs")
-          .update({
-            map_spec: spec,
-            status: "preview",
-            output_options: spec.furniture,
-            revision_count: Number(body.revisionCount ?? 0),
-          })
-          .eq("id", jobId);
+          .update({ map_spec: spec, output_options: spec.furniture, paid_revisions_used: existing.paid_revisions_used + 1 })
+          .eq("id", existing.id);
+      } else if (existing && !isPaid(existing.status)) {
+        await sb
+          .from("map_jobs")
+          .update({ map_spec: spec, output_options: spec.furniture, revision_count: Number(body.revisionCount ?? 0) })
+          .eq("id", existing.id);
+        await advanceJob(existing.id, "preview");
       } else {
+        newJob = Boolean(existing);
         const { data } = await sb
           .from("map_jobs")
           .insert({
@@ -105,11 +114,12 @@ export async function POST(req: Request) {
             vibe_prompt: input.vibe || null,
             answers: input.answers ?? {},
             uploaded_data: input.table
-              ? { columns: input.table.columns, rows: input.table.rows.slice(0, 2000), roles: input.roles }
+              ? { columns: input.table.columns, rows: input.table.rows.slice(0, 5000), roles: input.roles }
               : null,
             map_spec: spec,
             status: "preview",
             output_options: spec.furniture,
+            revision_of: existing?.id ?? null,
           })
           .select("id")
           .single();
@@ -120,5 +130,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ spec, jobId, engine });
+  return NextResponse.json({ spec, jobId, engine, newJob });
 }

@@ -1,7 +1,7 @@
 import { PricingCards } from "@/components/marketing/PricingCards";
 import { SectionHeading } from "./SectionHeading";
 
-const FREE = ["Unlimited previews", "Every style and page size", "Place names, relief, rivers", "One revision per map"];
+const FREE = ["Unlimited previews", "Every style and page size", "Place names, relief, rivers", "Unlimited changes while previewing"];
 
 export function Pricing() {
   return (

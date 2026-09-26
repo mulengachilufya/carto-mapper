@@ -16,11 +16,11 @@ const PLANS: Plan[] = [
   {
     name: "Single map",
     price: "$5",
-    items: ["Print-ready vector PDF + SVG", "A4 or Letter, portrait or landscape", "One free revision", "Your title, logo & source line"],
+    items: ["Print-ready vector PDF + SVG", "A4 or Letter, portrait or landscape", "One change after purchase", "Your title, logo & source line"],
     featured: true,
   },
-  { name: "3-map pack", price: "$12", items: ["Three maps — save $3", "One free revision each", "Credits never expire"], packType: "triple" },
-  { name: "5-map pack", price: "$18", items: ["Five maps — save $7", "One free revision each", "Made for report series"], packType: "five" },
+  { name: "3-map pack", price: "$12", items: ["Three maps — save $3", "One change after purchase each", "Credits never expire"], packType: "triple" },
+  { name: "5-map pack", price: "$18", items: ["Five maps — save $7", "One change after purchase each", "Made for report series"], packType: "five" },
 ];
 
 export function PricingCards() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { nanoid } from "nanoid";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
@@ -59,7 +60,13 @@ function titleFromData(prompt: string, roles: ColumnRoles | null, resolution: Re
       : roles.nameField.replace(/s$/i, "");
     return `${titleCase(roles.valueField)} by ${titleCase(unit)}${region && resolution?.level !== "world" ? `, ${region}` : ""}`;
   }
-  const s = prompt.trim().replace(/\s+/g, " ").split(/[.!?\n]/)[0].replace(/,?\s+(for|in order to|to be used in|to use in)\s+(a|an|the|our|my)\b.*$/i, "");
+  const s = prompt
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(/[.!?\n]/)[0]
+    // Drop the audience: "…, annual report 2026", "… for a donor briefing", "… for our board deck".
+    .replace(/,?\s+(?:for\s+)?(?:(?:a|an|the|our|my)\s+)?(?:annual|donor|board|quarterly|ministry|internal|client|funding)?\s*(?:report|briefing|deck|presentation|slides?|article|paper|thesis|newsletter|proposal)\b.*$/i, "")
+    .replace(/,?\s+(for|in order to|to be used in|to use in)\s+(a|an|the|our|my)\b.*$/i, "");
   if (!s) return region ? `Map of ${region}` : "Untitled Map";
   return titleCase(s.split(" ").slice(0, 10).join(" "));
 }
@@ -84,6 +91,20 @@ export function CreateWizard() {
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [creditedBanner, setCreditedBanner] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  // What this deployment can do (payments on/off), from the server — never assumed.
+  const [paymentEnabled, setPaymentEnabled] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((c: { payments?: boolean }) => alive && setPaymentEnabled(Boolean(c.payments)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("credited") === "1") {
@@ -92,7 +113,6 @@ export function CreateWizard() {
     }
   }, []);
 
-  const paymentEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
   const recommended = recommendType(roles, prompt, resolution);
   const geography: { level: GeoLevel; region?: string } | undefined = resolution
     ? { level: resolution.level, region: resolution.region }
@@ -128,7 +148,11 @@ export function CreateWizard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setSpec(json.spec as MapSpec);
-      if (json.jobId) setJobId(json.jobId);
+      // Every map gets an id, even without a database (Stripe verifies it on return).
+      setJobId(json.jobId ?? jobId ?? `local-${nanoid(12)}`);
+      if (json.newJob) {
+        setNotice("Your paid map already used its included revision, so this change was saved as a new map. The paid one is still on your download page.");
+      }
       if (opts?.revisionRequest) setRevisionsUsed((n) => n + 1);
       setStep(3);
     } catch {
@@ -155,6 +179,14 @@ export function CreateWizard() {
     stash();
     const sessionId = getSessionId();
     try {
+      // Freeze the design exactly as approved (style, elements, page) on the job.
+      if (jobId) {
+        await fetch("/api/job", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, sessionId, spec }),
+        }).catch(() => {});
+      }
       // A pack credit on this session? Spend it and skip Stripe entirely.
       const creditRes = await fetch(`/api/credits?sessionId=${encodeURIComponent(sessionId)}`);
       const creditJson = (await creditRes.json()) as { remaining?: number };
@@ -182,8 +214,8 @@ export function CreateWizard() {
         return;
       }
       throw new Error(json.error ?? "no checkout url");
-    } catch {
-      setError("Couldn't start checkout — check the Stripe keys in your environment.");
+    } catch (e) {
+      setError(e instanceof Error && e.message !== "no checkout url" ? e.message : "Couldn't start checkout. Please try again.");
     }
   }
 
@@ -226,6 +258,12 @@ export function CreateWizard() {
       {creditedBanner && (
         <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
           Pack purchased — your credits are ready. Build a map below and checkout will skip straight to download.
+        </p>
+      )}
+
+      {notice && (
+        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
+          {notice}
         </p>
       )}
 

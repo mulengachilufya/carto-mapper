@@ -119,6 +119,8 @@ interface Props {
   atlas?: AtlasLayers | null;
   /** Relief pixels per SVG unit; defaults to 1.6 on screen, 2.4 for PDF. */
   reliefResolution?: number;
+  /** Diagonal mark across the map (previews and unpaid downloads). */
+  watermark?: string;
   width: number;
   height: number;
   className?: string;
@@ -559,7 +561,8 @@ function buildMap(
     const isFocus = ft === focusFeature;
     if (countryLevelJoin && (isChoropleth || isDataUnit(ft))) {
       fill = regionFill(ft);
-      reliefFill = isDataUnit(ft) ? fill : T.reliefWash ?? T.noData;
+      // Highlighted countries let the terrain breathe through; choropleth colours stay exact.
+      reliefFill = isDataUnit(ft) ? (isFootprint ? withAlpha(fill, 0.78) : fill) : T.reliefWash ?? T.noData;
       stroke = style === "minimal" ? THEME.unitStroke : T.border;
     } else if (T.pastels && (!focusFeature || isFocus)) {
       fill = T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length];
@@ -703,6 +706,11 @@ function buildMap(
   };
 }
 
+function withAlpha(hex: string, a: number): string {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})` : hex;
+}
+
 function categoryTitle(field?: string): string {
   if (!field || /^(category|categories|type|class|kind)$/i.test(field.trim())) return "Type";
   return humanize(field);
@@ -821,6 +829,7 @@ export function CartoMap({
   subdivisions,
   atlas,
   reliefResolution,
+  watermark,
   width,
   height,
   className,
@@ -994,6 +1003,7 @@ export function CartoMap({
         {m.atlasLabels.map((l, i) => (
           <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} />
         ))}
+        {watermark && <Watermark text={watermark} frame={frame} k={k} serif={serif} />}
         {m.labels.map((l, i) => (
           <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }} fontWeight={600}>
             <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={T.paper} strokeWidth={2.6 * k} strokeLinejoin="round" strokeOpacity={0.9}>
@@ -1058,6 +1068,32 @@ export function CartoMap({
         </text>
       ))}
     </svg>
+  );
+}
+
+function Watermark({ text, frame, k, serif }: { text: string; frame: Rect; k: number; serif: string }) {
+  const size = 20 * k;
+  const line = `${text.toUpperCase()}   ·   `.repeat(8);
+  const rows = Math.ceil((frame.h * 1.6) / (size * 4));
+  const cx = frame.x + frame.w / 2;
+  const cy = frame.y + frame.h / 2;
+  return (
+    <g transform={`rotate(-22 ${cx} ${cy})`} pointerEvents="none" aria-hidden>
+      {Array.from({ length: rows }, (_, i) => (
+        <text
+          key={i}
+          x={cx - frame.w}
+          y={cy - (rows / 2) * size * 4 + i * size * 4}
+          fontSize={size}
+          fontWeight={700}
+          style={{ fontFamily: serif, letterSpacing: "0.2em" }}
+          fill="#1c1a17"
+          fillOpacity={0.09}
+        >
+          {line}
+        </text>
+      ))}
+    </g>
   );
 }
 

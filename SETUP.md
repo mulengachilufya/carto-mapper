@@ -47,13 +47,44 @@ with zero keys (the map spec uses the built-in cartographic rules engine).
 
 ---
 
-## 4. Stripe (the $5 payment)
+## 4. Stripe (the $5 payment) and the payment workflow
 
-1. Stripe → Developers → API keys → copy **test** secret + publishable keys into Netlify env.
-2. Stripe → Developers → **Webhooks** → add endpoint
-   `https://YOUR-SITE.netlify.app/api/stripe/webhook`, event `checkout.session.completed`,
-   and copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. Local testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+Every map job follows one state machine (`lib/workflow.ts`):
+
+```
+draft → preview → checkout → paid → delivered
+            ▲         │        └──► refunded (download locked again)
+            └ expired ┘
+```
+
+**The gates**
+
+| Situation | What the customer gets |
+|---|---|
+| Stripe **not** configured (`STRIPE_SECRET_KEY` unset) | Previews and downloads work, but **watermarked** — a misconfigured site never gives clean maps away |
+| Stripe configured, map not paid | Watermarked preview; clean PDF/SVG only after checkout |
+| Paid | Clean vector PDF + SVG, re-downloadable; one change after purchase included (`PAID_REVISIONS_INCLUDED`) |
+| Refunded (full) | Download locked again |
+
+Payment is confirmed two ways, so a customer never sees "payment required" after paying:
+the webhook, **and** a direct check with Stripe when they land back on `/download`
+(Checkout returns with `?cs={CHECKOUT_SESSION_ID}`).
+
+**Setup**
+
+1. Stripe → Developers → API keys → copy the **secret** key into Netlify as `STRIPE_SECRET_KEY`.
+2. Stripe → Developers → **Webhooks** → add endpoint `https://YOUR-SITE/api/stripe/webhook` with events:
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`.
+   Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Optional: create **promotion codes** in Stripe (e.g. for NGOs or schools) — checkout accepts them.
+4. Local testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+
+Without a database (Supabase unset) single-map payments still work — the job id travels
+through Stripe and is verified on return — but re-downloads after closing the tab, packs
+and the paid-revision allowance need the database. If you created the tables before this
+workflow existed, run the `alter table` lines at the bottom of `supabase/schema.sql`'s
+map_jobs section once.
 
 ---
 
