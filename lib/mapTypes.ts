@@ -120,7 +120,7 @@ export const MAP_TYPES_CATALOGUE: MapTypeDef[] = [
           title: "Facilities by Type",
           mapType: "categorical_point",
           geography: { level: "country", region: "Zambia" },
-          data: { nameField: "name", latField: "latitude", lonField: "longitude", categoryField: s.roles.categoryField },
+          data: { nameField: "name", latField: "latitude", lonField: "longitude", categoryField: s.roles.categoryField, valueLabel: "Facility type" },
           symbology: { palette: "Set2", paletteKind: "qualitative" },
           furniture: baseFurniture({ graticule: false }),
         }),

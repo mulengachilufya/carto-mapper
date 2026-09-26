@@ -35,11 +35,20 @@ const COUNTRIES = [
   "turkey", "iran", "iraq", "afghanistan", "ukraine", "russia",
 ];
 
+const DISPLAY_NAME: Record<string, string> = {
+  usa: "United States",
+  "united states": "United States",
+  uk: "United Kingdom",
+  "dr congo": "DR Congo",
+  "democratic republic of the congo": "DR Congo",
+  "ivory coast": "Côte d'Ivoire",
+};
+
 export function detectPlace(vibe: string): { region?: string; level?: GeoLevel } {
   const t = ` ${vibe.toLowerCase()} `;
   for (const c of COUNTRIES) {
     if (t.includes(` ${c} `) || t.includes(` ${c},`) || t.includes(` ${c}.`)) {
-      return { region: titleCase(c), level: "country" };
+      return { region: DISPLAY_NAME[c] ?? titleCase(c), level: "country" };
     }
   }
   for (const c of CONTINENTS) {
@@ -113,11 +122,14 @@ export function generateMapSpecHeuristic(input: GenerateInput): MapSpec {
   // Text
   const subjectLabel = labelForFirstAnswer(ind?.id, answers);
   const metricLabel = roles.valueField ? humanize(roles.valueField) : undefined;
+  // The legend title: the metric for value maps, the category column for categorical ones.
+  const legendLabel = isCategorical ? categoryLabel(roles.categoryField) : metricLabel;
   const title = buildTitle({ mapType, subjectLabel, metricLabel, region, level });
   const subtitle = buildSubtitle(answers, ind?.name);
 
   // Page
-  const page = pageForOutput(answers.output_use ?? "");
+  // A world map is ~2:1 — on a portrait page it leaves half the sheet empty.
+  const page = level === "world" ? { size: "A4" as const, orientation: "landscape" as const } : pageForOutput(answers.output_use ?? "");
 
   // Furniture conventions
   const furniture = {
@@ -147,7 +159,7 @@ export function generateMapSpecHeuristic(input: GenerateInput): MapSpec {
       categoryField: roles.categoryField,
       latField: roles.latField,
       lonField: roles.lonField,
-      valueLabel: metricLabel,
+      valueLabel: legendLabel,
       valueFormat,
     },
     symbology: {
@@ -233,12 +245,29 @@ function pageForOutput(output: string): MapSpec["page"] {
 
 function labelForFirstAnswer(industryId?: string, answers: Record<string, string> = {}): string {
   const ind = industryId ? getIndustry(industryId) : undefined;
-  if (!ind) return "Features";
+  if (!ind) return "";
   const q = ind.questions[0];
   const val = answers[q.id];
   const opt = q.options.find((o) => o.value === val);
-  return opt?.label ?? "Features";
+  return opt?.label ?? "";
 }
+
+function categoryLabel(field?: string): string {
+  if (!field || /^(category|categories|type|class|kind)$/i.test(field.trim())) return "Type";
+  return humanize(field);
+}
+
+const GENERIC_METRIC = /^(value|count|number|metric|amount|total)$/i;
+
+const TYPE_NOUN: Record<MapType, string> = {
+  choropleth: "Indicator",
+  footprint: "Where We Work",
+  proportional_symbol: "Sites",
+  graduated_symbol: "Sites",
+  dot: "Distribution",
+  point: "Locations",
+  categorical_point: "Sites by Type",
+};
 
 function buildTitle(o: {
   mapType: MapType;
@@ -247,13 +276,15 @@ function buildTitle(o: {
   region?: string;
   level: GeoLevel;
 }): string {
-  const where = o.region ? ` in ${o.region}` : o.level === "world" ? " by Country" : "";
-  if (o.mapType === "choropleth") {
-    const generic = !o.metricLabel || /^(value|count|number|metric|amount|total)$/i.test(o.metricLabel);
-    const what = generic ? cleanSubject(o.subjectLabel) : o.metricLabel;
-    return o.level === "world" ? `${what} by Country` : `${what}${where || ""}`.trim();
+  const metric = o.metricLabel && !GENERIC_METRIC.test(o.metricLabel) ? o.metricLabel : "";
+  const subject = cleanSubject(o.subjectLabel);
+  const where = o.level === "world" ? " by Country" : o.region ? ` in ${o.region}` : "";
+  if (o.mapType === "choropleth") return `${metric || subject || TYPE_NOUN.choropleth}${where}`;
+  if (o.mapType === "proportional_symbol" || o.mapType === "graduated_symbol") {
+    const what = metric && subject ? `${metric} at ${subject}` : metric || subject || TYPE_NOUN[o.mapType];
+    return `${what}${o.region && o.level !== "world" ? ` in ${o.region}` : ""}`;
   }
-  return `${cleanSubject(o.subjectLabel)}${where}`.trim();
+  return `${subject || TYPE_NOUN[o.mapType]}${o.region && o.level !== "world" ? ` in ${o.region}` : ""}`;
 }
 
 function buildSubtitle(answers: Record<string, string>, industryName?: string): string {

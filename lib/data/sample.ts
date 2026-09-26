@@ -1,6 +1,6 @@
-import { geoBounds, geoContains } from "d3-geo";
+import { geoBounds, geoCentroid, geoContains } from "d3-geo";
 import type { FeatureCollection, Feature } from "geojson";
-import { findCountry, type CountryFeature } from "@/lib/cartography/geo";
+import { CONTINENT_BBOX, findCountry, mainParts, normalizeName, type CountryFeature } from "@/lib/cartography/geo";
 import { detectPlace } from "@/lib/mapspec/generate";
 import { getIndustry } from "@/lib/industries";
 import type { ParsedTable, ColumnRoles, Row } from "@/lib/data/parse";
@@ -85,7 +85,7 @@ export function generateSample(
         : undefined;
 
   if (countryFocus) return pointSample(geo, countryFocus, industry);
-  return choroplethSample(geo, industry);
+  return choroplethSample(geo, industry, place.level === "continent" ? place.region : undefined);
 }
 
 function pointSample(geo: FeatureCollection, countryName: string, industry: string): SampleResult {
@@ -94,7 +94,7 @@ function pointSample(geo: FeatureCollection, countryName: string, industry: stri
   const noun = NOUN[industry] ?? "Site";
   const vc = valueCol(industry);
   const cats = categoriesFor(industry);
-  const coords = randomPointsIn(feature, 28);
+  const coords = randomPointsIn(mainParts(feature), 28);
 
   const rows: Row[] = coords.map((c, i) => ({
     name: `${noun} ${i + 1}`,
@@ -116,31 +116,63 @@ function pointSample(geo: FeatureCollection, countryName: string, industry: stri
   };
 }
 
-function choroplethSample(geo: FeatureCollection, industry: string): SampleResult {
-  const all = (geo.features as CountryFeature[]).filter((f) => f.properties?.name);
-  const picked = shuffle(all).slice(0, 24);
+function choroplethSample(geo: FeatureCollection, industry: string, region?: string): SampleResult {
+  const box = region ? CONTINENT_BBOX[normalizeName(region)] : undefined;
+  const all = (geo.features as CountryFeature[]).filter((f) => {
+    if (!f.properties?.name || normalizeName(f.properties.name) === "antarctica") return false;
+    if (!box) return true;
+    const [lon, lat] = geoCentroid(f);
+    return lon >= box[0] && lon <= box[2] && lat >= box[1] && lat <= box[3];
+  });
+  // Real indicators are spatially clustered (neighbours look alike), so build a smooth
+  // random surface and read each country's value off it, plus a little local noise.
+  // A few gaps keep the "No data" handling honest.
+  const field = smoothField();
   const vc = valueCol(industry);
-  const rows: Row[] = picked.map((f) => ({ country: f.properties.name, [vc]: sampleValue() }));
+  const rows: Row[] = all
+    .filter(() => Math.random() > 0.08)
+    .map((f) => {
+      const [lon, lat] = geoCentroid(f);
+      const v = field(lon, lat) * (0.8 + Math.random() * 0.4);
+      return { country: f.properties.name, [vc]: Math.round(20 + v * 480) };
+    });
   return {
     table: { columns: ["country", vc], rows, rowCount: rows.length },
     roles: { nameField: "country", valueField: vc },
   };
 }
 
+/** A smooth 0–1 surface over lon/lat: a handful of broad Gaussian bumps. */
+function smoothField(): (lon: number, lat: number) => number {
+  const bumps = Array.from({ length: 5 }, () => ({
+    lon: -150 + Math.random() * 300,
+    lat: -40 + Math.random() * 100,
+    s: 25 + Math.random() * 35,
+    a: 0.4 + Math.random() * 0.6,
+  }));
+  return (lon, lat) => {
+    let v = 0;
+    for (const b of bumps) v += b.a * Math.exp(-((lon - b.lon) ** 2 + (lat - b.lat) ** 2) / (2 * b.s * b.s));
+    return Math.min(1, v);
+  };
+}
+
 function randomPointsIn(feature: Feature, n: number): [number, number][] {
-  const [[w, s], [e, north]] = geoBounds(feature);
+  const [[w, s], [eRaw, north]] = geoBounds(feature);
+  // Bounds crossing the antimeridian come back with east < west; unwrap them.
+  const e = eRaw < w ? eRaw + 360 : eRaw;
+  const wrap = (lon: number) => (lon > 180 ? lon - 360 : lon);
   const out: [number, number][] = [];
   let tries = 0;
   while (out.length < n && tries < n * 400) {
     tries++;
-    const lon = w + Math.random() * (e - w);
+    const lon = wrap(w + Math.random() * (e - w));
     const lat = s + Math.random() * (north - s);
     if (geoContains(feature, [lon, lat])) out.push([lon, lat]);
   }
-  // If the polygon is awkward, fall back to bbox points so we always return something.
-  while (out.length < n) {
-    out.push([w + Math.random() * (e - w), s + Math.random() * (north - s)]);
-  }
+  // If the polygon is awkward, fall back to its centroid so points never land abroad.
+  const c = geoCentroid(feature);
+  while (out.length < n) out.push([c[0], c[1]]);
   return out;
 }
 
@@ -159,13 +191,4 @@ function sampleValue(): number {
 
 function round(n: number): number {
   return Math.round(n * 10000) / 10000;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }

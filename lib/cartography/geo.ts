@@ -1,6 +1,6 @@
 import { feature } from "topojson-client";
-import { geoCentroid } from "d3-geo";
-import type { Feature, FeatureCollection, Geometry, Polygon } from "geojson";
+import { geoArea, geoCentroid } from "d3-geo";
+import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from "geojson";
 
 export interface CountryProps {
   name: string;
@@ -92,32 +92,56 @@ export function findCountry(
   return matchFeature(regionName, buildNameIndex(fc));
 }
 
+/**
+ * The parts of a country worth framing a map on: its largest polygon plus any others
+ * at least `ratio` of its size. Drops far-flung small islands (Easter Island for
+ * Chile, Hawaii for the USA, French Guiana for France) that would otherwise shrink
+ * the mainland to a sliver. Everything is still drawn; this only guides the fit.
+ */
+export function mainParts(f: CountryFeature, ratio = 0.2): Feature {
+  const g = f.geometry;
+  if (!g || g.type !== "MultiPolygon") return f;
+  const polys = (g as MultiPolygon).coordinates.map((coordinates) => ({
+    coordinates,
+    area: geoArea({ type: "Polygon", coordinates }),
+  }));
+  const max = Math.max(...polys.map((p) => p.area));
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "MultiPolygon", coordinates: polys.filter((p) => p.area >= max * ratio).map((p) => p.coordinates) },
+  };
+}
+
 export function centroidOf(f: Feature): [number, number] {
   return geoCentroid(f as Parameters<typeof geoCentroid>[0]) as [number, number];
 }
 
-/** A GeoJSON rectangle, used as a fit target for continent/point extents. */
+/**
+ * A GeoJSON rectangle, used as a fit target for continent/point extents.
+ * d3-geo treats polygons as spherical and expects a CLOCKWISE exterior ring;
+ * a counter-clockwise ring means "the whole globe except this box", which made
+ * every continent map fit to the entire world.
+ */
 export function bboxPolygon(
   w: number,
   s: number,
   e: number,
   n: number,
 ): Feature<Polygon> {
+  // Densify the edges: on a sphere a bare 4-corner box has great-circle sides that
+  // bow away from the parallels, so wide boxes would fit the wrong extent.
+  const steps = Math.max(2, Math.ceil(Math.max(e - w, n - s) / 2));
+  const ring: [number, number][] = [];
+  for (let i = 0; i < steps; i++) ring.push([w, s + ((n - s) * i) / steps]);
+  for (let i = 0; i < steps; i++) ring.push([w + ((e - w) * i) / steps, n]);
+  for (let i = 0; i < steps; i++) ring.push([e, n - ((n - s) * i) / steps]);
+  for (let i = 0; i < steps; i++) ring.push([e - ((e - w) * i) / steps, s]);
+  ring.push([w, s]);
   return {
     type: "Feature",
     properties: {},
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [w, s],
-          [e, s],
-          [e, n],
-          [w, n],
-          [w, s],
-        ],
-      ],
-    },
+    geometry: { type: "Polygon", coordinates: [ring] },
   };
 }
 
@@ -132,6 +156,8 @@ export const CONTINENT_BBOX: Record<string, [number, number, number, number]> = 
   "east africa": [28, -12, 52, 18],
   "west africa": [-18, 4, 16, 25],
   "southern africa": [11, -35, 41, -8],
+  "central africa": [8, -14, 34, 24],
+  "latin america": [-118, -56, -34, 33],
 };
 
 export function continentBBoxPolygon(name: string): Feature<Polygon> | null {
