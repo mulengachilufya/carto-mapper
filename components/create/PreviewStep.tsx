@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import { Button } from "@/components/ui/Button";
 import { CartoMap } from "@/components/cartography/CartoMap";
-import { buildNameIndex, matchFeature } from "@/lib/cartography/geo";
+import { useSubdivisions } from "@/components/cartography/useSubdivisions";
+import { chooseJoin } from "@/lib/cartography/join";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
 import { parseMapSpec, type MapSpec, type Furniture } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
@@ -43,22 +44,17 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
   const H = Math.round(landscape ? W / Math.SQRT2 : W * Math.SQRT2);
   const pdf = pagePt(spec.page);
 
-  // For choropleths, how many place names actually matched a country?
+  const subdivisions = useSubdivisions(spec, geo);
+
+  // For region maps, how many place names matched a country / province / district?
   const coverage = useMemo(() => {
-    if (!geo || spec.mapType !== "choropleth" || !spec.data.nameField) return null;
-    const idx = buildNameIndex(geo);
-    const seen = new Set<string>();
-    let matched = 0;
-    for (const row of data) {
-      const nm = row[spec.data.nameField];
-      if (nm == null) continue;
-      const key = String(nm);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (matchFeature(key, idx)) matched++;
-    }
-    return { total: seen.size, matched };
-  }, [geo, spec.mapType, spec.data.nameField, data]);
+    const field = spec.data.nameField;
+    if (!geo || (spec.mapType !== "choropleth" && spec.mapType !== "footprint") || !field) return null;
+    const names = Array.from(new Set(data.map((r) => r[field]).filter((v) => v != null).map(String)));
+    const join = chooseJoin(names, geo, subdivisions, spec.geography.level);
+    const noun = join.level === "adm1" ? "provinces/states" : join.level === "adm2" ? "districts" : "countries";
+    return { total: names.length, matched: names.filter((n) => join.match(n)).length, noun };
+  }, [geo, subdivisions, spec.mapType, spec.data.nameField, spec.geography.level, data]);
 
   const setFurniture = (key: keyof Furniture, value: boolean) =>
     setSpec(parseMapSpec({ ...spec, furniture: { ...spec.furniture, [key]: value } }));
@@ -111,14 +107,14 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
         <div>
           <div ref={frameRef} className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
             {geo ? (
-              <CartoMap spec={spec} data={data} geo={geo} width={W} height={H} className="h-auto w-full" />
+              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} className="h-auto w-full" />
             ) : (
               <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
             )}
           </div>
           {coverage && coverage.matched < coverage.total && (
             <p className="mt-2 text-[13px] text-amber-700">
-              Matched {coverage.matched} of {coverage.total} place names — unmatched places stay uncoloured (shown as “No data”). Check spelling or try full country names.
+              Matched {coverage.matched} of {coverage.total} place names to {coverage.noun} — unmatched places stay uncoloured (shown as “No data”). Check the spelling against official names.
             </p>
           )}
         </div>
@@ -195,7 +191,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
           aria-hidden
           style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
         >
-          <CartoMap spec={spec} data={data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
         </div>
       )}
     </div>

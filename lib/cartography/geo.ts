@@ -190,3 +190,39 @@ export function pointsBBoxPolygon(points: LatLon[], padFraction = 0.15): Feature
   const padY = Math.max((n - s) * padFraction, 0.5);
   return bboxPolygon(w - padX, s - padY, e + padX, n + padY);
 }
+
+// ── Subdivisions (provinces / districts), loaded per country on demand ──
+
+type SubdivisionIndex = Record<string, { iso: string; levels: number[] }>;
+let subdivisionIndex: Promise<SubdivisionIndex> | null = null;
+const subdivisionCache = new Map<string, Promise<FeatureCollection | undefined>>();
+
+/**
+ * Load a country's ADM1 (provinces/states) or ADM2 (districts) boundaries, built
+ * from geoBoundaries by scripts/build-subdivisions.mjs. `countryName` is the name
+ * used in countries-50m.json. Resolves undefined when none are bundled.
+ */
+export function loadSubdivisions(
+  countryName: string,
+  level: 1 | 2,
+  baseUrl = "",
+): Promise<FeatureCollection | undefined> {
+  const key = `${countryName}|${level}`;
+  if (!subdivisionCache.has(key)) {
+    subdivisionIndex ??= fetch(`${baseUrl}/geodata/subdivisions/index.json`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}));
+    subdivisionCache.set(
+      key,
+      subdivisionIndex.then(async (idx) => {
+        const entry = idx[countryName];
+        if (!entry?.levels.includes(level)) return undefined;
+        const res = await fetch(`${baseUrl}/geodata/subdivisions/${entry.iso}-${level}.json`);
+        if (!res.ok) return undefined;
+        const topo = await res.json();
+        return feature(topo, topo.objects.units) as unknown as FeatureCollection;
+      }).catch(() => undefined),
+    );
+  }
+  return subdivisionCache.get(key)!;
+}

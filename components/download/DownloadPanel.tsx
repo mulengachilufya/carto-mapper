@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CartoMap } from "@/components/cartography/CartoMap";
 import { useCountries } from "@/components/cartography/useCountries";
+import { useSubdivisions } from "@/components/cartography/useSubdivisions";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
 import { getSessionId } from "@/lib/session";
 import type { MapSpec } from "@/lib/mapspec/schema";
@@ -27,6 +28,7 @@ export function DownloadPanel() {
   const [gate, setGate] = useState<Gate>("checking");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const subdivisions = useSubdivisions(stash?.spec, geo);
 
   // Load whatever the wizard stashed, plus the job id from either the stash
   // or the ?job= param Stripe redirects back with.
@@ -191,7 +193,7 @@ export function DownloadPanel() {
           aria-hidden
           style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
         >
-          <CartoMap spec={stash.spec} data={stash.data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+          <CartoMap spec={stash.spec} data={stash.data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
         </div>
       )}
     </div>

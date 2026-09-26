@@ -18,6 +18,7 @@ import {
   mainParts,
   type CountryFeature,
 } from "@/lib/cartography/geo";
+import { chooseJoin, type Subdivisions } from "@/lib/cartography/join";
 import type { Row } from "@/lib/data/parse";
 
 // Restrained, paper-and-ink palette — the quiet base a cartographer builds on.
@@ -44,6 +45,8 @@ interface Props {
   spec: MapSpec;
   data?: Row[];
   geo: FeatureCollection;
+  /** Provinces/districts of the focus country (see useSubdivisions). */
+  subdivisions?: Subdivisions;
   width: number;
   height: number;
   className?: string;
@@ -121,7 +124,14 @@ function humanize(s: string): string {
 
 const SYMBOL_TYPES = new Set(["proportional_symbol", "graduated_symbol", "dot", "point", "categorical_point"]);
 
-function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number, H: number) {
+function buildMap(
+  spec: MapSpec,
+  data: Row[],
+  geo: FeatureCollection,
+  W: number,
+  H: number,
+  subdivisions: Subdivisions | undefined,
+) {
   // Everything is sized relative to the page so thumbnails, previews and PDFs share one layout.
   const k = Math.max(0.4, Math.min(2, Math.min(W, H) / 600));
   const f = spec.furniture;
@@ -147,31 +157,41 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
 
   const rawPoints = isSymbolMap ? extractPoints(spec, data, nameIndex) : [];
 
+  // Region maps join place names to whichever boundaries they name: countries, or the
+  // focus country's provinces/districts (a province table must not render as "No data").
+  const isChoropleth = !isSymbolMap && !isFootprint && Boolean(spec.data.valueField && spec.data.nameField);
+  const isRegionMap = (isChoropleth || isFootprint) && Boolean(spec.data.nameField);
+  const subs = focusFeature ? subdivisions : undefined;
+  const join = isRegionMap
+    ? chooseJoin(
+        data.map((r) => r[spec.data.nameField!]).filter((v) => v != null).map(String),
+        geo,
+        subs,
+        level,
+      )
+    : null;
+  const regionUnits: CountryFeature[] = join && join.level !== "country" ? join.features : [];
+  const joinable: CountryFeature[] = join?.level === "country" ? drawn : regionUnits;
+  const keyOf = (ft: CountryFeature) => join?.keyOf(ft) ?? "";
+
   const footprintMatched = new Set<string>();
   const footprintFeatures: CountryFeature[] = [];
-  if (isFootprint && spec.data.nameField) {
+  const valueByKey = new Map<string, number>();
+  if (join) {
     for (const row of data) {
-      const nm = row[spec.data.nameField];
+      const nm = row[spec.data.nameField!];
       if (nm == null) continue;
-      const ft = matchFeature(String(nm), nameIndex);
-      if (ft && !footprintMatched.has(normalizeName(ft.properties.name))) {
-        footprintMatched.add(normalizeName(ft.properties.name));
+      const ft = join.match(String(nm));
+      if (!ft) continue;
+      if (isFootprint && !footprintMatched.has(keyOf(ft))) {
+        footprintMatched.add(keyOf(ft));
         footprintFeatures.push(ft);
       }
+      const v = isChoropleth ? num(row[spec.data.valueField!]) : null;
+      if (v !== null) valueByKey.set(keyOf(ft), v);
     }
   }
-
-  const valueByName = new Map<string, number>();
-  const isChoropleth = !isSymbolMap && !isFootprint && Boolean(spec.data.valueField && spec.data.nameField);
-  if (isChoropleth) {
-    for (const row of data) {
-      const v = num(row[spec.data.valueField!]);
-      const nm = row[spec.data.nameField!];
-      if (v === null || nm == null) continue;
-      const ft = matchFeature(String(nm), nameIndex);
-      if (ft) valueByName.set(normalizeName(ft.properties.name), v);
-    }
-  }
+  const usesSubdivisions = Boolean(regionUnits.length || subs?.adm1);
 
   // ── What the projection is fitted to ──
   let fitObject: GeoPermissibleObjects;
@@ -188,17 +208,17 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
   else if (isFootprint && footprintFeatures.length)
     fitObject = { type: "FeatureCollection", features: footprintFeatures } as unknown as GeoPermissibleObjects;
   else if (rawPoints.length) fitObject = pointsBBoxPolygon(rawPoints) ?? { type: "Sphere" };
-  else if (isChoropleth && valueByName.size)
+  else if (isChoropleth && valueByKey.size)
     fitObject = {
       type: "FeatureCollection",
-      features: drawn.filter((ft) => valueByName.has(normalizeName(ft.properties.name))),
+      features: joinable.filter((ft) => valueByKey.has(keyOf(ft))),
     } as unknown as GeoPermissibleObjects;
   else fitObject = { type: "Sphere" };
 
   // ── Classification / symbol scale (independent of the projection) ──
   let classes: { breaks: number[]; colors: string[] } | null = null;
   if (isChoropleth) {
-    const br = classify([...valueByName.values()], spec.symbology.classification, spec.symbology.classes);
+    const br = classify([...valueByKey.values()], spec.symbology.classification, spec.symbology.classes);
     classes = {
       breaks: br.breaks,
       colors: getPaletteColors(spec.symbology.palette, br.classes, spec.symbology.reverse).slice(0, br.classes),
@@ -206,7 +226,7 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
   }
   const colorFor = (v: number | undefined) =>
     v === undefined || !classes ? THEME.noData : classes.colors[classIndex(v, classes.breaks)] ?? THEME.noData;
-  const hasNoData = isChoropleth && drawn.some((ft) => !valueByName.has(normalizeName(ft.properties.name)));
+  const hasNoData = isChoropleth && joinable.some((ft) => !valueByKey.has(keyOf(ft)));
 
   const proportional = spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol";
   const categorical = spec.mapType === "categorical_point";
@@ -324,7 +344,11 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
   const footer: { text: string; muted?: boolean }[] = [];
   if (f.caption && spec.caption) wrapText(spec.caption, footMaxChars, 2).forEach((t) => footer.push({ text: t }));
   if (b.notes) wrapText(b.notes, footMaxChars, 3).forEach((t) => footer.push({ text: t }));
-  if (f.source) footer.push({ text: spec.source || "Boundaries: Natural Earth · Made with CartoMapper", muted: true });
+  if (f.source) {
+    let source = spec.source || "Boundaries: Natural Earth · Made with CartoMapper";
+    if (usesSubdivisions && !/geoboundaries/i.test(source)) source += " · Subdivisions: geoBoundaries (CC BY 4.0)";
+    footer.push({ text: source, muted: true });
+  }
   const footLine = footSize * 1.35;
   const footerH = footer.length ? 8 * k + footer.length * footLine : 0;
 
@@ -377,10 +401,10 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
     legendRect = { x: frame.x, y: frame.y + frame.h + 12 * k, w: legend.w, h: legend.h };
   } else if (legend) {
     const weighted: { f: GeoPermissibleObjects; w: number }[] = [];
-    for (const ft of drawn) {
-      const key = normalizeName(ft.properties.name);
-      const important =
-        (isChoropleth && valueByName.has(key)) || (isFootprint && footprintMatched.has(key)) || ft === focusFeature;
+    const isData = (ft: CountryFeature) =>
+      join ? valueByKey.has(keyOf(ft)) || footprintMatched.has(keyOf(ft)) : false;
+    for (const ft of [...drawn, ...regionUnits]) {
+      const important = isData(ft) || ft === focusFeature;
       weighted.push({ f: ft as unknown as GeoPermissibleObjects, w: important ? 3 : isChoropleth ? 0.8 : 0.4 });
     }
     weighted.sort((a, c) => c.w - a.w);
@@ -442,15 +466,16 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
   const path = geoPath(projection);
   const pathOf = (g: GeoPermissibleObjects) => path(g) ?? "";
 
+  const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
+  const regionFill = (ft: CountryFeature) =>
+    isChoropleth ? colorFor(valueByKey.get(keyOf(ft))) : footprintMatched.has(keyOf(ft)) ? accent : THEME.focusLand;
+  const countryLevelJoin = join?.level === "country";
+
   const units = drawn.map((ft) => {
-    const key = normalizeName(ft.properties.name);
     let fill = THEME.land;
     let stroke = THEME.contextStroke;
-    if (isChoropleth) {
-      fill = colorFor(valueByName.get(key));
-      stroke = THEME.unitStroke;
-    } else if (isFootprint) {
-      fill = footprintMatched.has(key) ? getPaletteColors(spec.symbology.palette, 5, false)[3] : THEME.land;
+    if (countryLevelJoin) {
+      fill = regionFill(ft);
       stroke = THEME.unitStroke;
     } else if (ft === focusFeature) {
       fill = THEME.focusLand;
@@ -459,7 +484,18 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
     }
     return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, stroke, name: ft.properties.name };
   });
-  const focusPath = focusFeature && !isChoropleth && !isFootprint ? pathOf(focusFeature as unknown as GeoPermissibleObjects) : "";
+  // Provinces/districts the data is joined to, drawn over their country.
+  const regions = regionUnits.map((ft) => ({
+    d: pathOf(ft as unknown as GeoPermissibleObjects),
+    fill: regionFill(ft),
+    name: ft.properties.name,
+  }));
+  // Province lines for context: on locator/symbol maps, and over district shading.
+  const provinceLines =
+    subs?.adm1 && join?.level !== "adm1" ? pathOf(subs.adm1 as unknown as GeoPermissibleObjects) : "";
+  const provinceLineStyle = join?.level === "adm2" && isChoropleth ? "over-districts" : "context";
+  const focusPath =
+    focusFeature && !countryLevelJoin ? pathOf(focusFeature as unknown as GeoPermissibleObjects) : "";
 
   const symbols = projectSymbols(projection);
   const graticulePath = f.graticule ? pathOf(geoGraticule10()) : "";
@@ -495,6 +531,9 @@ function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, W: number,
     frame,
     isWorld,
     units,
+    regions,
+    provinceLines,
+    provinceLineStyle,
     focusPath,
     symbols,
     labels,
@@ -593,8 +632,8 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
   return out;
 }
 
-export function CartoMap({ spec, data = [], geo, width, height, className, forPdf }: Props) {
-  const m = buildMap(spec, data, geo, width, height);
+export function CartoMap({ spec, data = [], geo, subdivisions, width, height, className, forPdf }: Props) {
+  const m = buildMap(spec, data, geo, width, height, subdivisions);
   const { k, frame } = m;
   // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
   const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
@@ -630,6 +669,20 @@ export function CartoMap({ spec, data = [], geo, width, height, className, forPd
             <title>{u.name}</title>
           </path>
         ))}
+        {m.regions.map((u, i) => (
+          <path key={`r${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4 * k} strokeLinejoin="round">
+            <title>{u.name}</title>
+          </path>
+        ))}
+        {m.provinceLines && (
+          <path
+            d={m.provinceLines}
+            fill="none"
+            stroke={m.provinceLineStyle === "over-districts" ? THEME.unitStroke : THEME.contextStroke}
+            strokeWidth={(m.provinceLineStyle === "over-districts" ? 1.3 : 0.6) * k}
+            strokeLinejoin="round"
+          />
+        )}
         {m.focusPath && (
           <path d={m.focusPath} fill="none" stroke={THEME.focusStroke} strokeWidth={1.1 * k} strokeLinejoin="round" />
         )}
