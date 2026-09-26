@@ -1,7 +1,10 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { geoPath, geoGraticule10, geoContains, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
 import { scaleSqrt } from "d3-scale";
 import type { Feature, FeatureCollection } from "geojson";
-import type { MapSpec } from "@/lib/mapspec/schema";
+import type { MapSpec, MapStyle } from "@/lib/mapspec/schema";
 import { chooseProjection } from "@/lib/cartography/projection";
 import { classify, classIndex } from "@/lib/cartography/classify";
 import { getPaletteColors } from "@/lib/cartography/palettes";
@@ -19,6 +22,9 @@ import {
   type CountryFeature,
 } from "@/lib/cartography/geo";
 import { chooseJoin, type Subdivisions } from "@/lib/cartography/join";
+import { loadAtlasLayers, type AtlasLayers } from "@/lib/cartography/atlas";
+import { placeAtlasLabels, type MapLabel } from "@/lib/cartography/labels";
+import { renderRelief, TERRAIN_ATTRIBUTION, type ReliefImages, type ReliefMode } from "@/lib/cartography/relief";
 import type { Row } from "@/lib/data/parse";
 
 // Restrained, paper-and-ink palette — the quiet base a cartographer builds on.
@@ -41,12 +47,78 @@ const THEME = {
   symbolStroke: "#ffffff",
 };
 
+/** Base-map colours per style. Data colours always come from the spec's palette. */
+const STYLE: Record<
+  MapStyle,
+  {
+    paper: string;
+    water: string;
+    sphere: string;
+    land: string;
+    focusLand: string;
+    border: string;
+    focusStroke: string;
+    noData: string;
+    graticule: string;
+    river?: string;
+    lake?: string;
+    pastels?: string[];
+    /** Neighbours over relief get a pale wash so the focus country reads first. */
+    reliefWash?: string;
+  }
+> = {
+  minimal: {
+    paper: THEME.paper,
+    water: THEME.water,
+    sphere: THEME.sphere,
+    land: THEME.land,
+    focusLand: THEME.focusLand,
+    border: THEME.contextStroke,
+    focusStroke: THEME.focusStroke,
+    noData: THEME.noData,
+    graticule: THEME.graticule,
+  },
+  atlas: {
+    paper: "#fbf8f0",
+    water: "#b9dbee",
+    sphere: "#b9dbee",
+    land: "#e4dfc4",
+    focusLand: "#e9eed2",
+    border: "#8a7666",
+    focusStroke: "#5a3b2c",
+    noData: "#e9e4d6",
+    graticule: "#5f86a3",
+    river: "#3576b8",
+    lake: "#a8d2ec",
+    reliefWash: "rgba(251,248,240,0.5)",
+  },
+  classic: {
+    paper: "#fbf7ee",
+    water: "#cde6f4",
+    sphere: "#cde6f4",
+    land: "#efe6cf",
+    focusLand: "#f5deaa",
+    border: "#8f7663",
+    focusStroke: "#6b4636",
+    noData: "#ebe4d3",
+    graticule: "#7fa8c6",
+    river: "#4a8ccc",
+    lake: "#cde6f4",
+    // Political-atlas pastels: sand, sage, rose, lavender, butter.
+    pastels: ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"],
+  },
+};
+
 interface Props {
   spec: MapSpec;
   data?: Row[];
   geo: FeatureCollection;
   /** Provinces/districts of the focus country (see useSubdivisions). */
   subdivisions?: Subdivisions;
+  /** Atlas reference layers; loaded automatically when omitted (pass null to skip). */
+  atlas?: AtlasLayers | null;
+  /** Relief pixels per SVG unit; defaults to 1.6 on screen, 2.4 for PDF. */
+  reliefResolution?: number;
   width: number;
   height: number;
   className?: string;
@@ -131,11 +203,14 @@ function buildMap(
   W: number,
   H: number,
   subdivisions: Subdivisions | undefined,
+  atlas: AtlasLayers | null,
 ) {
   // Everything is sized relative to the page so thumbnails, previews and PDFs share one layout.
   const k = Math.max(0.4, Math.min(2, Math.min(W, H) / 600));
   const f = spec.furniture;
   const b = spec.branding;
+  const style = spec.style;
+  const T = STYLE[style];
   const level = spec.geography.level;
   const region = spec.geography.region ?? "";
   const isWorld = level === "world";
@@ -225,7 +300,7 @@ function buildMap(
     };
   }
   const colorFor = (v: number | undefined) =>
-    v === undefined || !classes ? THEME.noData : classes.colors[classIndex(v, classes.breaks)] ?? THEME.noData;
+    v === undefined || !classes ? T.noData : classes.colors[classIndex(v, classes.breaks)] ?? T.noData;
   const hasNoData = isChoropleth && joinable.some((ft) => !valueByKey.has(keyOf(ft)));
 
   const proportional = spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol";
@@ -268,7 +343,7 @@ function buildMap(
             ? formatNumber(classes!.breaks[0], spec.data.valueFormat)
             : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} – ${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
       }));
-      if (hasNoData) rows.push({ color: THEME.noData, label: "No data", muted: true } as (typeof rows)[number]);
+      if (hasNoData) rows.push({ color: T.noData, label: "No data", muted: true } as (typeof rows)[number]);
       const title = titleText("Value");
       const labelW = Math.max(...rows.map((r) => textW(r.label, labelSize)));
       return { kind: "classes", title, rows, ...box(title, 14 * k + 7 * k + labelW, rows.length * 15 * k - 3 * k) };
@@ -347,6 +422,7 @@ function buildMap(
   if (f.source) {
     let source = spec.source || "Boundaries: Natural Earth · Made with CartoMapper";
     if (usesSubdivisions && !/geoboundaries/i.test(source)) source += " · Subdivisions: geoBoundaries (CC BY 4.0)";
+    if (style === "atlas" && !/terrain/i.test(source)) source += ` · ${TERRAIN_ATTRIBUTION}`;
     footer.push({ text: source, muted: true });
   }
   const footLine = footSize * 1.35;
@@ -468,26 +544,41 @@ function buildMap(
 
   const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
   const regionFill = (ft: CountryFeature) =>
-    isChoropleth ? colorFor(valueByKey.get(keyOf(ft))) : footprintMatched.has(keyOf(ft)) ? accent : THEME.focusLand;
+    isChoropleth ? colorFor(valueByKey.get(keyOf(ft))) : footprintMatched.has(keyOf(ft)) ? accent : T.focusLand;
   const countryLevelJoin = join?.level === "country";
+  const isDataUnit = (ft: CountryFeature) =>
+    Boolean(join) && (valueByKey.has(keyOf(ft)) || footprintMatched.has(keyOf(ft)));
 
+  // Each unit carries two fills: a vector one, and the one used once relief has loaded
+  // (transparent, so the terrain shows; neighbours washed back behind the focus).
   const units = drawn.map((ft) => {
-    let fill = THEME.land;
-    let stroke = THEME.contextStroke;
-    if (countryLevelJoin) {
+    let fill = T.land;
+    let reliefFill: string | undefined = T.reliefWash ?? "none";
+    let stroke = T.border;
+    const isFocus = ft === focusFeature;
+    if (countryLevelJoin && (isChoropleth || isDataUnit(ft))) {
       fill = regionFill(ft);
-      stroke = THEME.unitStroke;
-    } else if (ft === focusFeature) {
-      fill = THEME.focusLand;
-    } else if (!focusFeature && !isWorld) {
-      fill = THEME.focusLand;
+      reliefFill = isDataUnit(ft) ? fill : T.reliefWash ?? T.noData;
+      stroke = style === "minimal" ? THEME.unitStroke : T.border;
+    } else if (T.pastels && (!focusFeature || isFocus)) {
+      fill = T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length];
+    } else if (isFocus || (!focusFeature && !isWorld)) {
+      fill = T.focusLand;
+      reliefFill = "none";
     }
-    return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, stroke, name: ft.properties.name };
+    if (!focusFeature && !countryLevelJoin) reliefFill = "none";
+    if (isFocus) reliefFill = "none";
+    if (countryLevelJoin && isFootprint && !isDataUnit(ft)) {
+      fill = T.pastels ? T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length] : T.land;
+      reliefFill = "none";
+    }
+    return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill, stroke, name: ft.properties.name, data: isDataUnit(ft) };
   });
   // Provinces/districts the data is joined to, drawn over their country.
   const regions = regionUnits.map((ft) => ({
     d: pathOf(ft as unknown as GeoPermissibleObjects),
     fill: regionFill(ft),
+    reliefFill: isChoropleth || isDataUnit(ft) ? regionFill(ft) : "none",
     name: ft.properties.name,
   }));
   // Province lines for context: on locator/symbol maps, and over district shading.
@@ -496,6 +587,39 @@ function buildMap(
   const provinceLineStyle = join?.level === "adm2" && isChoropleth ? "over-districts" : "context";
   const focusPath =
     focusFeature && !countryLevelJoin ? pathOf(focusFeature as unknown as GeoPermissibleObjects) : "";
+
+  // Water-lined coasts (classic atlas engraving): strokes of the land outline under it.
+  const coastPath = style === "classic" ? pathOf({ type: "FeatureCollection", features: drawn } as unknown as GeoPermissibleObjects) : "";
+
+  // Rivers and lakes, thinned by importance for the map's scale.
+  const riverMaxRank = isWorld ? 3 : level === "continent" ? 6 : 10;
+  const rivers: { d: string; width: number }[] = [];
+  let lakesPath = "";
+  if (atlas && T.river) {
+    const byRank = new Map<number, GeoPermissibleObjects[]>();
+    for (const r of atlas.rivers.features) {
+      const rank = (r.properties as { rank: number }).rank;
+      if (rank > riverMaxRank) continue;
+      const band = Math.min(4, Math.floor(rank / 2.5));
+      if (!byRank.has(band)) byRank.set(band, []);
+      byRank.get(band)!.push(r as unknown as GeoPermissibleObjects);
+    }
+    for (const [band, list] of [...byRank.entries()].sort((a, c) => c[0] - a[0])) {
+      rivers.push({
+        d: pathOf({ type: "FeatureCollection", features: list } as unknown as GeoPermissibleObjects),
+        width: k * (isWorld ? 0.55 : 1.25) * Math.max(0.35, 1 - band * 0.2),
+      });
+    }
+    lakesPath = pathOf({
+      type: "FeatureCollection",
+      features: atlas.lakes.features.filter((l) => (l.properties as { rank: number }).rank <= riverMaxRank + 1),
+    } as unknown as GeoPermissibleObjects);
+  }
+
+  // Terrain request (rendered asynchronously in the browser).
+  const hasDataFills = isChoropleth || isFootprint;
+  const reliefModes: ReliefMode[] =
+    style === "atlas" ? (hasDataFills ? ["atlas", "shade"] : ["atlas"]) : style === "classic" ? ["shade"] : [];
 
   const symbols = projectSymbols(projection);
   const graticulePath = f.graticule ? pathOf(geoGraticule10()) : "";
@@ -519,6 +643,29 @@ function buildMap(
       ? placeLabels(symbols, 8.5 * k, frame, [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null), k)
       : [];
 
+  // Atlas reference labels: countries, cities, seas, lakes, peaks, regions.
+  const pointLabelBoxes: Rect[] = labels.map((l) => {
+    const w = textW(l.text, 8.5 * k);
+    const x = l.anchor === "start" ? l.x : l.anchor === "end" ? l.x - w : l.x - w / 2;
+    return { x, y: l.y - 8.5 * k * 0.9, w, h: 8.5 * k * 1.2 };
+  });
+  const atlasLabels: MapLabel[] =
+    style !== "minimal" && f.labels
+      ? placeAtlasLabels({
+          projection,
+          frame,
+          k,
+          level,
+          countries: drawn,
+          focus: focusFeature,
+          layers: atlas,
+          obstacles: [legendRect, northRect, scaleRect, ...pointLabelBoxes].filter((r): r is Rect => r !== null),
+          circles: symbols.map((sy) => ({ cx: sy.cx, cy: sy.cy, r: sy.r + 1.5 * k })),
+          quiet: isSymbolMap,
+          countryLabels: !(isChoropleth && regionUnits.length),
+        })
+      : [];
+
   const footerTop = legendBelow && legendRect ? legendRect.y + legendRect.h : frame.y + frame.h;
 
   return {
@@ -530,6 +677,14 @@ function buildMap(
     footSize,
     frame,
     isWorld,
+    style,
+    theme: T,
+    projection,
+    reliefModes,
+    coastPath,
+    rivers,
+    lakesPath,
+    atlasLabels,
     units,
     regions,
     provinceLines,
@@ -632,13 +787,105 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
   return out;
 }
 
-export function CartoMap({ spec, data = [], geo, subdivisions, width, height, className, forPdf }: Props) {
-  const m = buildMap(spec, data, geo, width, height, subdivisions);
+// Label typography by role — the conventions of a printed atlas: water in blue italic
+// serif, countries in spaced capitals, towns in a plain sans.
+const LABEL_STYLE: Record<MapLabel["role"], { fill: string; serif: boolean; italic?: boolean; weight?: number }> = {
+  country: { fill: "#6a5446", serif: true, weight: 600 },
+  "focus-city": { fill: "#1f1d1a", serif: false, weight: 600 },
+  city: { fill: "#5a544c", serif: false },
+  ocean: { fill: "#2c5f8f", serif: true, italic: true },
+  sea: { fill: "#2f6a9e", serif: true, italic: true },
+  lake: { fill: "#2f6a9e", serif: true, italic: true },
+  peak: { fill: "#4b3527", serif: false },
+  region: { fill: "#7a5a3a", serif: true, italic: true },
+};
+
+function useAtlasLayers(enabled: boolean, provided: AtlasLayers | null | undefined) {
+  const [layers, setLayers] = useState<AtlasLayers | null>(null);
+  useEffect(() => {
+    if (!enabled || provided !== undefined) return;
+    let alive = true;
+    loadAtlasLayers().then((l) => alive && setLayers(l));
+    return () => {
+      alive = false;
+    };
+  }, [enabled, provided]);
+  return provided !== undefined ? provided : enabled ? layers : null;
+}
+
+export function CartoMap({
+  spec,
+  data = [],
+  geo,
+  subdivisions,
+  atlas,
+  reliefResolution,
+  width,
+  height,
+  className,
+  forPdf,
+}: Props) {
+  const layers = useAtlasLayers(spec.style !== "minimal", atlas);
+  const m = useMemo(
+    () => buildMap(spec, data, geo, width, height, subdivisions, layers),
+    [spec, data, geo, width, height, subdivisions, layers],
+  );
   const { k, frame } = m;
+  const T = m.theme;
+
+  // Terrain renders in the browser after layout; the vector map shows meanwhile.
+  const pixelRatio = reliefResolution ?? (forPdf ? 2.4 : 1.6);
+  const reliefKey = m.reliefModes.length
+    ? [
+        m.reliefModes.join("+"),
+        m.projection.scale(),
+        ...m.projection.translate(),
+        ...m.projection.rotate(),
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        pixelRatio,
+      ]
+        .map((v) => (typeof v === "number" ? v.toFixed(3) : v))
+        .join("|")
+    : "";
+  const [relief, setRelief] = useState<{ key: string; images: ReliefImages } | null>(null);
+  useEffect(() => {
+    if (!reliefKey) return;
+    let alive = true;
+    const paper = T.paper.match(/\w\w/g)!.map((h) => parseInt(h, 16)) as [number, number, number];
+    renderRelief({ projection: m.projection, frame, pixelRatio, modes: m.reliefModes, paper })
+      .then((images) => alive && setRelief({ key: reliefKey, images: images ?? {} }))
+      .catch(() => alive && setRelief({ key: reliefKey, images: {} }));
+    return () => {
+      alive = false;
+    };
+    // reliefKey captures everything the image depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reliefKey]);
+  const images = relief?.key === reliefKey ? relief.images : null;
+  const hasRelief = Boolean(images?.atlas);
+  const reliefState = !reliefKey ? "none" : images ? "ready" : "pending";
+
   // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
   const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
   const sans = forPdf ? "helvetica" : "var(--font-sans, 'Inter', system-ui, sans-serif)";
-  const clipId = `cm-clip-${[frame.x, frame.y, frame.w, frame.h].map((v) => Math.round(v)).join("-")}`;
+  const id = [frame.x, frame.y, frame.w, frame.h].map((v) => Math.round(v)).join("-");
+  const clipId = `cm-clip-${id}`;
+  const dataClipId = `cm-data-${id}-${m.units.filter((u) => u.data).length}-${m.regions.length}`;
+  const dataUnits = [...m.units.filter((u) => u.data), ...m.regions];
+  const img = (href: string) => (
+    <image
+      href={href}
+      x={frame.x}
+      y={frame.y}
+      width={frame.w}
+      height={frame.h}
+      preserveAspectRatio="none"
+      clipPath={m.isWorld ? `url(#${clipId}-sphere)` : undefined}
+    />
+  );
 
   return (
     <svg
@@ -646,45 +893,87 @@ export function CartoMap({ spec, data = [], geo, subdivisions, width, height, cl
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       data-cartomap-ready="true"
+      data-relief={reliefState}
       className={className}
-      style={{ fontFamily: sans, display: "block", background: THEME.paper }}
+      style={{ fontFamily: sans, display: "block", background: T.paper }}
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
         <clipPath id={clipId}>
           <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
         </clipPath>
+        {m.isWorld && (
+          <clipPath id={`${clipId}-sphere`}>
+            <path d={m.spherePath} />
+          </clipPath>
+        )}
+        {images?.shade && m.style === "atlas" && dataUnits.length > 0 && (
+          <clipPath id={dataClipId}>
+            {dataUnits.map((u, i) => (
+              <path key={i} d={u.d} />
+            ))}
+          </clipPath>
+        )}
       </defs>
-      <rect x={0} y={0} width={width} height={height} fill={THEME.paper} />
+      <rect x={0} y={0} width={width} height={height} fill={T.paper} />
 
       {/* ── Map body, clipped to the frame ── */}
       <g clipPath={`url(#${clipId})`}>
-        <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill={m.isWorld ? THEME.paper : THEME.water} />
-        {m.isWorld && <path d={m.spherePath} fill={THEME.sphere} />}
+        <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill={m.isWorld ? T.paper : T.water} />
+        {m.isWorld && <path d={m.spherePath} fill={T.sphere} />}
+        {images?.atlas && img(images.atlas)}
         {m.graticulePath && (
-          <path d={m.graticulePath} fill="none" stroke={THEME.graticule} strokeWidth={0.35 * k} strokeOpacity={0.6} />
+          <path d={m.graticulePath} fill="none" stroke={T.graticule} strokeWidth={0.35 * k} strokeOpacity={hasRelief ? 0.45 : 0.6} />
         )}
+        {m.coastPath &&
+          [14, 9, 5.5, 2.6].map((w, i) => (
+            <path key={`wl${i}`} d={m.coastPath} fill="none" stroke="#5f9bc7" strokeOpacity={0.07 + i * 0.05} strokeWidth={w * k} strokeLinejoin="round" />
+          ))}
         {m.units.map((u, i) => (
-          <path key={`u${i}`} d={u.d} fill={u.fill} stroke={u.stroke} strokeWidth={0.45 * k} strokeLinejoin="round">
+          <path
+            key={`u${i}`}
+            d={u.d}
+            fill={hasRelief ? u.reliefFill : u.fill}
+            stroke={u.stroke}
+            strokeWidth={(m.style === "minimal" ? 0.45 : 0.6) * k}
+            strokeLinejoin="round"
+          >
             <title>{u.name}</title>
           </path>
         ))}
         {m.regions.map((u, i) => (
-          <path key={`r${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4 * k} strokeLinejoin="round">
+          <path key={`r${i}`} d={u.d} fill={hasRelief ? u.reliefFill : u.fill} stroke={THEME.unitStroke} strokeWidth={0.4 * k} strokeLinejoin="round">
             <title>{u.name}</title>
           </path>
+        ))}
+        {/* Terrain texture over data colours (atlas: only on the data; classic: all land). */}
+        {images?.shade &&
+          (m.style === "atlas" ? (
+            dataUnits.length > 0 && (
+              <g clipPath={`url(#${dataClipId})`} opacity={0.75}>
+                {img(images.shade)}
+              </g>
+            )
+          ) : (
+            <g opacity={0.55}>{img(images.shade)}</g>
+          ))}
+        {m.lakesPath && <path d={m.lakesPath} fill={T.lake} stroke={T.river} strokeWidth={0.35 * k} />}
+        {m.rivers.map((r, i) => (
+          <path key={`rv${i}`} d={r.d} fill="none" stroke={T.river} strokeWidth={r.width} strokeLinecap="round" strokeLinejoin="round" />
         ))}
         {m.provinceLines && (
           <path
             d={m.provinceLines}
             fill="none"
-            stroke={m.provinceLineStyle === "over-districts" ? THEME.unitStroke : THEME.contextStroke}
+            stroke={m.provinceLineStyle === "over-districts" ? THEME.unitStroke : m.style === "minimal" ? THEME.contextStroke : T.border}
             strokeWidth={(m.provinceLineStyle === "over-districts" ? 1.3 : 0.6) * k}
+            strokeDasharray={m.style !== "minimal" && m.provinceLineStyle === "context" ? `${2.2 * k} ${1.6 * k}` : undefined}
+            strokeOpacity={m.style === "minimal" ? 1 : 0.8}
             strokeLinejoin="round"
           />
         )}
         {m.focusPath && (
-          <path d={m.focusPath} fill="none" stroke={THEME.focusStroke} strokeWidth={1.1 * k} strokeLinejoin="round" />
+          <path d={m.focusPath} fill="none" stroke={T.focusStroke} strokeWidth={(m.style === "minimal" ? 1.1 : 1.4) * k} strokeLinejoin="round" />
         )}
         {m.isWorld && <path d={m.spherePath} fill="none" stroke={THEME.muted} strokeWidth={0.6 * k} />}
         {m.symbols.map((s, i) => (
@@ -694,16 +983,19 @@ export function CartoMap({ spec, data = [], geo, subdivisions, width, height, cl
             cy={s.cy}
             r={s.r}
             fill={s.fill}
-            fillOpacity={s.r > 6 * k ? 0.72 : 0.92}
+            fillOpacity={s.r > 6 * k ? 0.78 : 0.95}
             stroke={THEME.symbolStroke}
-            strokeWidth={0.7 * k}
+            strokeWidth={(m.style === "minimal" ? 0.7 : 0.9) * k}
           >
             {s.name && <title>{s.name}</title>}
           </circle>
         ))}
+        {m.atlasLabels.map((l, i) => (
+          <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} />
+        ))}
         {m.labels.map((l, i) => (
-          <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }}>
-            <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={THEME.paper} strokeWidth={2.4 * k} strokeLinejoin="round">
+          <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }} fontWeight={600}>
+            <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={T.paper} strokeWidth={2.6 * k} strokeLinejoin="round" strokeOpacity={0.9}>
               {l.text}
             </text>
             <text x={l.x} y={l.y} textAnchor={l.anchor} fill={THEME.ink}>
@@ -713,8 +1005,19 @@ export function CartoMap({ spec, data = [], geo, subdivisions, width, height, cl
         ))}
       </g>
 
-      {/* Neatline */}
+      {/* Neatline — a double rule on atlas styles, like a printed plate */}
       <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="none" stroke={THEME.neat} strokeWidth={0.9 * k} />
+      {m.style !== "minimal" && (
+        <rect
+          x={frame.x - 3 * k}
+          y={frame.y - 3 * k}
+          width={frame.w + 6 * k}
+          height={frame.h + 6 * k}
+          fill="none"
+          stroke={THEME.neat}
+          strokeWidth={0.4 * k}
+        />
+      )}
 
       {/* ── Title block ── */}
       {m.header.map((h, i) => (
@@ -754,6 +1057,46 @@ export function CartoMap({ spec, data = [], geo, subdivisions, width, height, cl
         </text>
       ))}
     </svg>
+  );
+}
+
+function AtlasLabel({ label: l, k, serif, sans }: { label: MapLabel; k: number; serif: string; sans: string }) {
+  const st = LABEL_STYLE[l.role];
+  const lines = l.text.split("\n");
+  const common = {
+    x: l.x,
+    textAnchor: l.anchor,
+    fontSize: l.size,
+    fontStyle: st.italic ? "italic" : undefined,
+    fontWeight: st.weight,
+    style: { fontFamily: st.serif ? serif : sans, letterSpacing: l.letterSpacing ? `${l.letterSpacing}em` : undefined },
+  } as const;
+  const body = (props: Record<string, unknown>) =>
+    lines.map((line, i) => (
+      <text key={i} {...common} {...props} y={l.y + i * l.size * 1.1}>
+        {line}
+      </text>
+    ));
+  const m = l.marker;
+  return (
+    <g>
+      {m?.kind === "capital" && (
+        <g>
+          <circle cx={m.x} cy={m.y} r={2.9 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />
+          <circle cx={m.x} cy={m.y} r={1.3 * k} fill="#b3261e" />
+        </g>
+      )}
+      {m?.kind === "provincial" && <circle cx={m.x} cy={m.y} r={2 * k} fill="#2a211b" stroke="#fffdf6" strokeWidth={0.7 * k} />}
+      {m?.kind === "town" && <circle cx={m.x} cy={m.y} r={1.6 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />}
+      {m?.kind === "peak" && (
+        <polygon
+          points={`${m.x},${m.y - 3 * k} ${m.x + 2.8 * k},${m.y + 2 * k} ${m.x - 2.8 * k},${m.y + 2 * k}`}
+          fill="#3b2a20"
+        />
+      )}
+      {body({ fill: "none", stroke: "#fffcf2", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
+      {body({ fill: st.fill })}
+    </g>
   );
 }
 

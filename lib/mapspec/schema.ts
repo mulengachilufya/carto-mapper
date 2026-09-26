@@ -26,6 +26,14 @@ export const GEO_LEVELS = [
   "city",
 ] as const;
 
+/**
+ * The look of the base map:
+ *  - atlas    — a physical school-atlas page: hypsometric relief, sea depths, rivers, lakes
+ *  - classic  — a political atlas page: pastel countries, water-lined coasts, rivers
+ *  - minimal  — quiet paper-and-ink, for reports where the data must be the only colour
+ */
+export const MAP_STYLES = ["atlas", "classic", "minimal"] as const;
+
 export const PALETTE_KINDS = ["sequential", "diverging", "qualitative"] as const;
 export const CLASSIFICATIONS = ["quantile", "equal_interval", "jenks"] as const;
 export const PAGE_SIZES = ["A4", "Letter"] as const;
@@ -39,6 +47,7 @@ export const FurnitureSchema = z.object({
   caption: z.boolean().default(false),
   source: z.boolean().default(true),
   graticule: z.boolean().default(true),
+  labels: z.boolean().default(true), // place names: countries, cities, seas, peaks
 });
 export type Furniture = z.infer<typeof FurnitureSchema>;
 
@@ -52,6 +61,7 @@ export const MapSpecSchema = z.object({
   source: z.string().optional(),
 
   mapType: z.enum(MAP_TYPES).default("choropleth"),
+  style: z.enum(MAP_STYLES).default("atlas"),
 
   geography: z
     .object({
@@ -104,6 +114,7 @@ export const MapSpecSchema = z.object({
     caption: false,
     source: true,
     graticule: true,
+    labels: true,
   }),
 
   page: z
@@ -127,6 +138,7 @@ export const MapSpecSchema = z.object({
 
 export type MapSpec = z.infer<typeof MapSpecSchema>;
 export type MapType = (typeof MAP_TYPES)[number];
+export type MapStyle = (typeof MAP_STYLES)[number];
 export type GeoLevel = (typeof GEO_LEVELS)[number];
 export type PaletteKind = (typeof PALETTE_KINDS)[number];
 export type Classification = (typeof CLASSIFICATIONS)[number];

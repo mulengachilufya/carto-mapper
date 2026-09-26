@@ -1,9 +1,11 @@
-import { feature } from "topojson-client";
+import { feature, neighbors } from "topojson-client";
 import { geoArea, geoCentroid } from "d3-geo";
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from "geojson";
 
 export interface CountryProps {
   name: string;
+  /** 0–4: a colour index no neighbouring country shares (political-atlas colouring). */
+  mapcolor?: number;
 }
 export type CountryFeature = Feature<Geometry, CountryProps>;
 
@@ -17,9 +19,31 @@ export async function loadCountries(
   if (cache.has(detail)) return cache.get(detail)!;
   const res = await fetch(`${baseUrl}/geodata/countries-${detail}.json`);
   if (!res.ok) throw new Error(`Failed to load geodata countries-${detail}`);
-  const topo = await res.json();
-  const fc = feature(topo, topo.objects.countries) as unknown as FeatureCollection;
+  const fc = countriesFromTopology(await res.json());
   cache.set(detail, fc);
+  return fc;
+}
+
+/**
+ * Countries as GeoJSON, each with a `mapcolor` no neighbour shares — greedy graph
+ * colouring over shared borders, most-connected countries first.
+ */
+export function countriesFromTopology(topo: {
+  objects: { countries: { geometries: unknown[] } };
+}): FeatureCollection {
+  const fc = feature(topo as never, topo.objects.countries as never) as unknown as FeatureCollection;
+  const adj = neighbors(topo.objects.countries.geometries as never);
+  const order = adj.map((n, i) => [i, n.length]).sort((a, b) => b[1] - a[1]).map(([i]) => i);
+  const color = new Array<number>(adj.length).fill(-1);
+  for (const i of order) {
+    const used = new Set(adj[i].map((j) => color[j]));
+    let c = 0;
+    while (used.has(c)) c++;
+    color[i] = c % 5;
+  }
+  fc.features.forEach((f, i) => {
+    (f.properties as CountryProps).mapcolor = color[i];
+  });
   return fc;
 }
 
@@ -115,6 +139,23 @@ export function mainParts(f: CountryFeature, ratio = 0.2): Feature {
 
 export function centroidOf(f: Feature): [number, number] {
   return geoCentroid(f as Parameters<typeof geoCentroid>[0]) as [number, number];
+}
+
+/**
+ * d3-geo reads polygon rings as spherical and needs them clockwise. A ring wound the
+ * other way means "the whole globe except this shape" and paints over the entire map
+ * (simplification occasionally flips small polygons). Rewind any such polygon in place.
+ */
+export function fixWinding(fc: FeatureCollection): FeatureCollection {
+  for (const f of fc.features) {
+    const g = f.geometry;
+    if (!g) continue;
+    const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+    for (const rings of polys) {
+      if (geoArea({ type: "Polygon", coordinates: rings }) > 2 * Math.PI) rings.forEach((r) => r.reverse());
+    }
+  }
+  return fc;
 }
 
 /**
@@ -220,7 +261,7 @@ export function loadSubdivisions(
         const res = await fetch(`${baseUrl}/geodata/subdivisions/${entry.iso}-${level}.json`);
         if (!res.ok) return undefined;
         const topo = await res.json();
-        return feature(topo, topo.objects.units) as unknown as FeatureCollection;
+        return fixWinding(feature(topo, topo.objects.units) as unknown as FeatureCollection);
       }).catch(() => undefined),
     );
   }

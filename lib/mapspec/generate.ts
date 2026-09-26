@@ -140,6 +140,7 @@ export function generateMapSpecHeuristic(input: GenerateInput): MapSpec {
     scalebar: level !== "world" && level !== "continent",
     north_arrow: level !== "world",
     graticule: level === "world" || level === "continent",
+    labels: true,
     ...(input.outputOptions ?? {}),
   };
 
