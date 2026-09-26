@@ -1,40 +1,63 @@
+import Image from "next/image";
 import Link from "next/link";
+
+const COLUMNS = [
+  {
+    title: "Make",
+    links: [
+      { href: "/create", label: "Make a map" },
+      { href: "/atlas", label: "The Atlas" },
+      { href: "/#styles", label: "Map styles" },
+    ],
+  },
+  {
+    title: "Learn",
+    links: [
+      { href: "/#how", label: "How it works" },
+      { href: "/#who", label: "Who it's for" },
+      { href: "/#faq", label: "Questions" },
+    ],
+  },
+  {
+    title: "Buy",
+    links: [
+      { href: "/#pricing", label: "Pricing" },
+      { href: "/download", label: "Your downloads" },
+    ],
+  },
+];
 
 export function Footer() {
   return (
-    <footer className="relative mt-auto overflow-hidden border-t border-room-line bg-room">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.07]" aria-hidden>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/media/world-mono.png" alt="" className="h-full w-full object-cover object-center" />
-      </div>
-
-      <div className="relative mx-auto max-w-6xl px-5 py-12">
-        <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+    <footer className="relative mt-auto overflow-hidden bg-atlas-night text-atlas-paper">
+      <Image src="/media/world-mono.png" alt="" fill sizes="100vw" className="object-cover opacity-[0.06]" />
+      <div className="relative mx-auto max-w-7xl px-5 py-14 lg:px-8">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_2fr]">
           <div>
-            <p className="font-serif text-lg text-paper">CartoMapper</p>
-            <p className="mt-1.5 max-w-xs text-sm text-parchment-muted">
-              Cartography, by design. Every map runs through the same equal-area, ColorBrewer, honest-classification
-              pipeline — yours included.
+            <p className="display text-2xl font-semibold">CartoMapper</p>
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-atlas-paper/65">
+              Atlas-grade maps of anywhere on Earth, from whatever data you have. Real terrain, rivers, place names and
+              honest cartography — in minutes, not weeks.
             </p>
           </div>
-
-          <nav className="flex gap-x-10 gap-y-2 text-sm text-parchment-muted sm:gap-x-12">
-            <div className="space-y-2.5">
-              <p className="font-mono-tight text-[10px] uppercase tracking-wider text-brass">Product</p>
-              <Link href="/#examples" className="block transition-colors hover:text-paper">Examples</Link>
-              <Link href="/#how" className="block transition-colors hover:text-paper">How it works</Link>
-              <Link href="/#pricing" className="block transition-colors hover:text-paper">Pricing</Link>
-            </div>
-            <div className="space-y-2.5">
-              <p className="font-mono-tight text-[10px] uppercase tracking-wider text-brass">Start</p>
-              <Link href="/create" className="block transition-colors hover:text-paper">Create a map</Link>
-            </div>
+          <nav className="grid grid-cols-3 gap-6 text-sm">
+            {COLUMNS.map((c) => (
+              <div key={c.title} className="space-y-2.5">
+                <p className="eyebrow text-atlas-ochre">{c.title}</p>
+                {c.links.map((l) => (
+                  <Link key={l.href} href={l.href} className="block text-atlas-paper/70 transition-colors hover:text-atlas-paper">
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            ))}
           </nav>
         </div>
-
-        <div className="mt-10 flex flex-col items-start justify-between gap-3 border-t border-room-line pt-6 text-xs text-parchment-muted sm:flex-row sm:items-center">
-          <p className="font-mono-tight">Boundaries © Natural Earth</p>
-          <p className="font-mono-tight">© {new Date().getFullYear()} CartoMapper</p>
+        <div className="mt-12 flex flex-col gap-3 border-t border-atlas-paper/10 pt-6 font-mono text-[11px] text-atlas-paper/45 sm:flex-row sm:justify-between">
+          <p>
+            Boundaries © Natural Earth · Subdivisions © geoBoundaries (CC BY 4.0) · Terrain © Mapzen Terrain Tiles
+          </p>
+          <p>© {new Date().getFullYear()} CartoMapper</p>
         </div>
       </div>
     </footer>

@@ -13,14 +13,19 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { name: "Single map", price: "$5", items: ["One print-ready PDF (300 DPI)", "1 free revision included", "A4 or Letter, your choice"], featured: true },
-  { name: "3-map pack", price: "$12", items: ["Three maps — save $3", "1 free revision each", "Use any time"], packType: "triple" },
-  { name: "5-map pack", price: "$18", items: ["Five maps — save $7", "1 free revision each", "Best for reports & series"], packType: "five" },
+  {
+    name: "Single map",
+    price: "$5",
+    items: ["Print-ready vector PDF + SVG", "A4 or Letter, portrait or landscape", "One free revision", "Your title, logo & source line"],
+    featured: true,
+  },
+  { name: "3-map pack", price: "$12", items: ["Three maps — save $3", "One free revision each", "Credits never expire"], packType: "triple" },
+  { name: "5-map pack", price: "$18", items: ["Five maps — save $7", "One free revision each", "Made for report series"], packType: "five" },
 ];
 
 export function PricingCards() {
   return (
-    <div className="mt-10 grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-6 lg:grid-cols-3">
       {PLANS.map((p) => (
         <PriceCard key={p.name} plan={p} />
       ))}
@@ -57,51 +62,37 @@ function PriceCard({ plan }: { plan: Plan }) {
 
   return (
     <div
-      className={`relative rounded-[3px] p-7 ring-1 ${
-        plan.featured ? "bg-room-2 ring-brass/50" : "bg-room-2/70 ring-room-line"
+      className={`relative flex flex-col p-8 ${
+        plan.featured ? "plate" : "border border-atlas-rule bg-atlas-card/70"
       }`}
     >
       {plan.featured && (
-        <span className="absolute -top-2.5 left-7 rounded-full bg-brass px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-room">
-          Most common
+        <span className="absolute -top-3 left-8 z-10 rounded-full bg-atlas-red px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-atlas-paper">
+          Most chosen
         </span>
       )}
-      <h3 className="font-medium text-paper">{plan.name}</h3>
-      <p className="mt-2 font-serif text-4xl font-semibold text-paper">{plan.price}</p>
-      <ul className="mt-5 space-y-2.5 text-sm text-parchment-muted">
+      <h3 className="font-medium text-atlas-ink">{plan.name}</h3>
+      <p className="display mt-2 text-5xl font-semibold text-atlas-ink">{plan.price}</p>
+      <ul className="mt-6 flex-1 space-y-3 text-atlas-ink-2">
         {plan.items.map((it) => (
-          <li key={it} className="flex gap-2.5">
-            <Tick />
+          <li key={it} className="flex gap-3">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rotate-45 bg-atlas-ochre" />
             <span>{it}</span>
           </li>
         ))}
       </ul>
-      <div className="mt-6">
+      <div className="relative z-10 mt-8">
         {plan.packType ? (
-          <Button
-            onClick={buyPack}
-            disabled={busy}
-            variant="secondary"
-            className="w-full border-room-line bg-transparent text-paper hover:bg-room-3"
-          >
-            {busy ? "Redirecting…" : "Buy pack"}
+          <Button onClick={buyPack} disabled={busy} variant="secondary" className="w-full border-atlas-ink/25 bg-transparent text-atlas-ink hover:bg-atlas-paper-2">
+            {busy ? "Opening checkout…" : "Buy pack"}
           </Button>
         ) : (
-          <Button href="/create" className="w-full bg-brass text-room hover:bg-brass/90">
-            Create my map
+          <Button href="/create" className="w-full bg-atlas-deep text-atlas-paper hover:bg-atlas-ocean">
+            Make my map
           </Button>
         )}
       </div>
-      {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-xs text-atlas-red">{error}</p>}
     </div>
-  );
-}
-
-function Tick() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 22 22" className="mt-0.5 shrink-0" aria-hidden>
-      <circle cx="11" cy="11" r="11" fill="var(--color-brass)" opacity="0.16" />
-      <path d="M6.5 11.3l3 3 6-6.4" fill="none" stroke="var(--color-brass)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

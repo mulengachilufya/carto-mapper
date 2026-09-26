@@ -36,16 +36,16 @@ export function CompassMark() {
   return (
     <span ref={wrapRef} className="inline-flex">
       <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden>
-        <circle cx="13" cy="13" r="11.25" stroke="var(--color-brass)" strokeWidth="1.25" />
-        <circle cx="13" cy="13" r="8.5" stroke="var(--color-brass)" strokeWidth="0.5" opacity="0.4" />
+        <circle cx="13" cy="13" r="11.25" stroke="var(--color-atlas-ochre)" strokeWidth="1.25" />
+        <circle cx="13" cy="13" r="8.5" stroke="var(--color-atlas-ochre)" strokeWidth="0.5" opacity="0.4" />
         <g
           ref={needleRef}
           style={{ transformOrigin: "13px 13px", transition: "transform 0.5s cubic-bezier(0.2,0.7,0.2,1)" }}
         >
-          <polygon points="13,4.5 15.2,13 13,21.5 10.8,13" fill="var(--color-brass)" />
-          <polygon points="13,4.5 13,13 10.8,13" fill="var(--color-paper)" opacity="0.35" />
+          <polygon points="13,4.5 15.2,13 13,21.5 10.8,13" fill="var(--color-atlas-ochre)" />
+          <polygon points="13,4.5 13,13 10.8,13" fill="var(--color-atlas-paper)" opacity="0.5" />
         </g>
-        <circle cx="13" cy="13" r="1.3" fill="var(--color-room)" stroke="var(--color-brass)" strokeWidth="0.75" />
+        <circle cx="13" cy="13" r="1.3" fill="var(--color-atlas-deep)" stroke="var(--color-atlas-ochre)" strokeWidth="0.75" />
       </svg>
     </span>
   );
