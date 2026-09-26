@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { nanoid } from "nanoid";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
 import { MapTypeStep } from "./MapTypeStep";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
-import { getSessionId } from "@/lib/session";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
 import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
 import { resolvePlaces, type Resolution } from "@/lib/data/resolve";
+import type { Usage } from "@/lib/quota";
 
 interface Brand {
   title: string;
@@ -90,28 +89,21 @@ export function CreateWizard() {
   const [generating, setGenerating] = useState(false);
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [creditedBanner, setCreditedBanner] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  // What this deployment can do (payments on/off), from the server — never assumed.
-  const [paymentEnabled, setPaymentEnabled] = useState(false);
+  // Today's free maps, from the server (null when accounts are off).
+  const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/config")
+    fetch("/api/me")
       .then((r) => r.json())
-      .then((c: { payments?: boolean }) => alive && setPaymentEnabled(Boolean(c.payments)))
+      .then((m: { usage?: Usage | null }) => alive && setUsage(m.usage ?? null))
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
 
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("credited") === "1") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time init from the URL on mount
-      setCreditedBanner(true);
-    }
-  }, []);
+  const atLimit = Boolean(usage && usage.remaining <= 0 && !jobId);
 
   const recommended = recommendType(roles, prompt, resolution);
   const geography: { level: GeoLevel; region?: string } | undefined = resolution
@@ -138,21 +130,25 @@ export function CreateWizard() {
             logoDataUrl: brand.logoDataUrl || undefined,
             notes: brand.notes || undefined,
           },
-          sessionId: getSessionId(),
           jobId,
           previousSpec: opts?.previousSpec,
           revisionRequest: opts?.revisionRequest,
           revisionCount: opts?.revisionRequest ? revisionsUsed + 1 : revisionsUsed,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setSpec(json.spec as MapSpec);
-      // Every map gets an id, even without a database (Stripe verifies it on return).
-      setJobId(json.jobId ?? jobId ?? `local-${nanoid(12)}`);
-      if (json.newJob) {
-        setNotice("Your paid map already used its included revision, so this change was saved as a new map. The paid one is still on your download page.");
+      const json = await res.json().catch(() => ({}));
+      if (json.usage) setUsage(json.usage as Usage);
+      if (res.status === 401) {
+        window.location.assign(`/signup?next=${encodeURIComponent("/create")}`);
+        return;
       }
+      if (res.status === 429) {
+        setError(String(json.message ?? "You've reached today's limit."));
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSpec(json.spec as MapSpec);
+      setJobId(json.jobId ?? jobId ?? null);
       if (opts?.revisionRequest) setRevisionsUsed((n) => n + 1);
       setStep(3);
     } catch {
@@ -174,48 +170,15 @@ export function CreateWizard() {
     }
   }
 
-  async function handleCheckout() {
-    if (!spec) return;
+  /** Downloaded: keep the saved copy identical to the file (style, elements, page). */
+  function handleDownloaded() {
     stash();
-    const sessionId = getSessionId();
-    try {
-      // Freeze the design exactly as approved (style, elements, page) on the job.
-      if (jobId) {
-        await fetch("/api/job", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId, sessionId, spec }),
-        }).catch(() => {});
-      }
-      // A pack credit on this session? Spend it and skip Stripe entirely.
-      const creditRes = await fetch(`/api/credits?sessionId=${encodeURIComponent(sessionId)}`);
-      const creditJson = (await creditRes.json()) as { remaining?: number };
-      if (jobId && (creditJson.remaining ?? 0) > 0) {
-        const consumeRes = await fetch("/api/credits/consume", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, jobId }),
-        });
-        if (consumeRes.ok) {
-          window.location.assign(`/download?job=${encodeURIComponent(jobId)}&paid=1`);
-          return;
-        }
-        // Fall through to normal checkout if the credit spend lost a race.
-      }
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
+    if (spec && jobId) {
+      fetch("/api/job", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, sessionId, title: spec.title }),
-      });
-      const json = await res.json();
-      if (json.url) {
-        window.location.assign(json.url);
-        return;
-      }
-      throw new Error(json.error ?? "no checkout url");
-    } catch (e) {
-      setError(e instanceof Error && e.message !== "no checkout url" ? e.message : "Couldn't start checkout. Please try again.");
+        body: JSON.stringify({ jobId, spec }),
+      }).catch(() => {});
     }
   }
 
@@ -261,15 +224,22 @@ export function CreateWizard() {
     <div>
       <Stepper step={step} />
 
-      {creditedBanner && (
-        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
-          Pack purchased — your credits are ready. Build a map below and checkout will skip straight to download.
+      {usage && (
+        <p className="mx-auto mt-5 flex max-w-2xl items-center justify-center gap-2 text-center text-sm text-muted">
+          <span className="font-mono text-xs">
+            {usage.used}/{usage.limit}
+          </span>
+          free maps used today · changes and downloads don&apos;t count ·{" "}
+          <a href="/account" className="underline hover:text-ink">
+            My maps
+          </a>
         </p>
       )}
 
-      {notice && (
-        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
-          {notice}
+      {atLimit && !error && (
+        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          You&apos;ve made your {usage?.limit} free maps for today. A new one frees up 24 hours after each map — meanwhile you
+          can open, change and download the maps you&apos;ve made from <a href="/account" className="underline">My maps</a>.
         </p>
       )}
 
@@ -331,10 +301,10 @@ export function CreateWizard() {
             setSpec={setSpec}
             onRevise={(text) => generate({ previousSpec: spec, revisionRequest: text })}
             onBack={() => setStep(2)}
-            onPay={handleCheckout}
+            onDownloaded={handleDownloaded}
             revisionsUsed={revisionsUsed}
             busy={generating}
-            paymentEnabled={paymentEnabled}
+            saved={Boolean(jobId)}
           />
         )}
       </div>

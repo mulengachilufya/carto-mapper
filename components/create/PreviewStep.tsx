@@ -7,6 +7,8 @@ import { CartoMap } from "@/components/cartography/CartoMap";
 import { useSubdivisions } from "@/components/cartography/useSubdivisions";
 import { chooseJoin } from "@/lib/cartography/join";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
+import { downloadSvgFile } from "@/lib/svg-download";
+import { CHANGES_PER_MAP } from "@/lib/quota-rules";
 import { parseMapSpec, type MapSpec, type Furniture } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
 
@@ -17,10 +19,12 @@ interface Props {
   setSpec: (spec: MapSpec) => void;
   onRevise: (text: string) => void;
   onBack: () => void;
-  onPay: () => void;
+  /** Called when the user downloads, so the saved copy matches what they took. */
+  onDownloaded: () => void;
   revisionsUsed: number;
   busy: boolean;
-  paymentEnabled: boolean;
+  /** Saved to the user's account (false when accounts are off). */
+  saved: boolean;
 }
 
 const FURNITURE_TOGGLES: { key: keyof Furniture; label: string }[] = [
@@ -40,8 +44,7 @@ const STYLES: { id: MapSpec["style"]; label: string; hint: string }[] = [
   { id: "minimal", label: "Minimal", hint: "Paper & ink" },
 ];
 
-export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay, revisionsUsed, busy, paymentEnabled }: Props) {
-  const frameRef = useRef<HTMLDivElement>(null);
+export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDownloaded, revisionsUsed, busy, saved }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -70,18 +73,10 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
     setSpec(parseMapSpec({ ...spec, page: { ...spec.page, ...patch } }));
 
   const downloadSvg = () => {
-    const svg = frameRef.current?.querySelector("svg");
+    const svg = exportRef.current?.querySelector("svg");
     if (!svg) return;
-    const clone = svg.cloneNode(true) as SVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    const str = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([str], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${slug(spec.title)}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadSvgFile(svg as SVGSVGElement, spec.title);
+    onDownloaded();
   };
 
   const exportPdf = async () => {
@@ -90,6 +85,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
     setExporting(true);
     try {
       await exportSvgToPdf(svg as SVGSVGElement, spec.page, slug(spec.title));
+      onDownloaded();
     } catch {
       /* ignore */
     } finally {
@@ -107,14 +103,14 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
   return (
     <div>
       <h2 className="display text-4xl font-semibold text-ink">Your map</h2>
-      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Get the print-ready PDF.</p>
+      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Download the print-ready PDF — it&apos;s free.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Map */}
         <div>
-          <div ref={frameRef} className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
             {geo ? (
-              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} watermark="Preview · CartoMapper" className="h-auto w-full" />
+              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} className="h-auto w-full" />
             ) : (
               <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
             )}
@@ -191,7 +187,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-muted">
-                {revisionsUsed === 0 ? "Unlimited while previewing" : `${revisionsUsed} change${revisionsUsed > 1 ? "s" : ""} made`}
+                {revisionsUsed === 0 ? `Up to ${CHANGES_PER_MAP} changes per map` : `${revisionsUsed} of ${CHANGES_PER_MAP} changes used`}
               </span>
               <Button variant="secondary" size="sm" onClick={applyRevision} disabled={busy || !revision.trim()}>
                 {busy ? "Working…" : "Apply"}
@@ -203,24 +199,19 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <Button onClick={onBack} variant="ghost">← Back</Button>
-        {paymentEnabled ? (
-          <div className="flex flex-col items-end gap-1.5">
-            <Button onClick={onPay} size="lg" disabled={busy}>
-              Looks good — get the clean print files ($5)
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-3">
+            <Button onClick={downloadSvg} variant="secondary" disabled={!geo}>
+              SVG for designers
             </Button>
-            <span className="text-xs text-muted">Vector PDF + SVG, no watermark · secure checkout by Stripe</span>
+            <Button onClick={exportPdf} size="lg" disabled={busy || exporting || !geo}>
+              {exporting ? "Preparing PDF…" : "Download PDF"}
+            </Button>
           </div>
-        ) : (
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-3">
-              <Button onClick={downloadSvg} variant="secondary">Watermarked SVG</Button>
-              <Button onClick={exportPdf} size="lg" disabled={busy || exporting}>
-                {exporting ? "Preparing PDF…" : "Download watermarked PDF"}
-              </Button>
-            </div>
-            <span className="text-xs text-muted">Payments aren&apos;t switched on for this site yet, so downloads carry a preview mark.</span>
-          </div>
-        )}
+          <span className="text-xs text-muted">
+            Vector PDF for print, no watermark{saved ? " · saved to My maps" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Hidden, print-font copy used only for client-side PDF export */}
@@ -230,7 +221,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
           aria-hidden
           style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
         >
-          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} watermark="Preview · CartoMapper" forPdf />
+          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
         </div>
       )}
     </div>

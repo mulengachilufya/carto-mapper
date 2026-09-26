@@ -43,7 +43,7 @@ export function Hero() {
               href="/create"
               className="inline-flex h-[3.25rem] items-center rounded-full bg-atlas-ochre px-8 text-base font-semibold text-atlas-night transition-colors hover:bg-[#d89c4b]"
             >
-              Make my map — preview free
+              Make my map — it’s free
             </Link>
             <Link
               href="/atlas"
@@ -52,7 +52,7 @@ export function Hero() {
               Open the Atlas
             </Link>
           </div>
-          <p className="mt-4 text-sm text-atlas-paper/55">No account. Pay $5 only when you love it.</p>
+          <p className="mt-4 text-sm text-atlas-paper/55">Free for everyone. Sign up in seconds, make up to 10 maps a day.</p>
         </div>
 
         <div className="relative">

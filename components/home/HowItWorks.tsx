@@ -15,17 +15,12 @@ const STEPS = [
   {
     gate: "Free",
     title: "Preview and refine",
-    body: "See the finished map before paying. Switch style, page size or orientation, toggle map elements, and ask for changes in plain words — as many as you like. Previews carry a light watermark.",
-  },
-  {
-    gate: "$5",
-    title: "Pay once, only when you love it",
-    body: "Secure checkout by Stripe removes the watermark. No account, no subscription; packs bring the price down for a series.",
+    body: "Switch style, page size or orientation, toggle map elements, and ask for changes in plain words — “make it green”, “use natural breaks”. The engine explains why it drew the map the way it did.",
   },
   {
     gate: "Yours",
     title: "Download print-ready files",
-    body: "A vector PDF at A4 or Letter for print and an SVG for your designer. Come back any time to download again; one change after purchase is included.",
+    body: "A vector PDF at A4 or Letter for print and an SVG for your designer — no watermark, no charge. Every map is saved to your account to open and download again.",
   },
 ];
 
@@ -51,7 +46,7 @@ export function HowItWorks() {
                 From a sentence to a <em className="font-normal text-atlas-sea">printed plate.</em>
               </>
             }
-            sub="Everything up to the moment you download is free. You only pay for a map you are proud of."
+            sub="Free from the first sentence to the final PDF. Sign up once, then make up to ten maps a day."
           />
           <div className="photo plate mt-10 hidden aspect-[3/4] max-w-sm -rotate-1 lg:block">
             <Image src="/media/figure-06.jpg" alt="An old framed map on a wall, crossed by window light" fill sizes="384px" className="object-cover p-[10px]" />
@@ -69,7 +64,7 @@ export function HowItWorks() {
                   <h3 className="display text-2xl font-semibold">{s.title}</h3>
                   <span
                     className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider ${
-                      s.gate === "$5" ? "bg-atlas-ochre text-atlas-night" : s.gate === "Yours" ? "bg-atlas-green/80 text-atlas-night" : "border border-atlas-paper/25 text-atlas-paper/70"
+                      s.gate === "Yours" ? "bg-atlas-green/80 text-atlas-night" : "border border-atlas-paper/25 text-atlas-paper/70"
                     }`}
                   >
                     {s.gate}

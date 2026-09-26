@@ -19,7 +19,15 @@ const FAQ = [
   },
   {
     q: "What if the map isn't right?",
-    a: "You see the finished map before you pay, and can change style, size and elements freely. After purchase, one revision in plain words is included — “make it green”, “use natural breaks”.",
+    a: "Change style, size and elements freely, and ask for up to 20 changes per map in plain words — “make it green”, “use natural breaks”. None of it counts toward your daily maps.",
+  },
+  {
+    q: "Is it really free?",
+    a: "Yes — no premium tier, no trial, no card. Every account gets the whole studio. The one limit is 10 new maps per person in any 24 hours, which keeps the engine fast for everyone.",
+  },
+  {
+    q: "Why do I need an account?",
+    a: "So your maps are saved for you to open and download again, and so the daily limit is fair — per person, not per browser. Signing up takes about thirty seconds: your name, country, what you do, email and a password.",
   },
 ];
 

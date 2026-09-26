@@ -6,7 +6,7 @@ import { Styles } from "@/components/home/Styles";
 import { Audiences } from "@/components/home/Audiences";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { AtlasTeaser } from "@/components/home/AtlasTeaser";
-import { Pricing } from "@/components/home/Pricing";
+import { Free } from "@/components/home/Free";
 import { Faq } from "@/components/home/Faq";
 import { FinalCta } from "@/components/home/FinalCta";
 
@@ -21,7 +21,7 @@ export default function Home() {
         <HowItWorks />
         <Audiences />
         <AtlasTeaser />
-        <Pricing />
+        <Free />
         <Faq />
         <FinalCta />
       </main>

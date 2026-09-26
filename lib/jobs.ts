@@ -1,71 +1,58 @@
-import Stripe from "stripe";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { canTransition, isPaid, normalizeStatus, type JobStatus } from "@/lib/workflow";
 
 export interface JobRow {
   id: string;
-  status: JobStatus;
-  session_id: string;
+  user_id: string | null;
+  created_at: string;
   map_spec: unknown;
   uploaded_data: { columns: string[]; rows: Record<string, unknown>[] } | null;
-  paid_revisions_used: number;
+  revision_count: number;
 }
 
-/** Jobs made without a database (Stripe-only or local setups) carry a client id. */
-export const isLocalJobId = (id: string) => id.startsWith("local-");
-
-export async function getJob(jobId: string): Promise<JobRow | null> {
+/** A saved map, only if it belongs to `userId`. */
+export async function getOwnJob(jobId: string, userId: string): Promise<JobRow | null> {
   const sb = getServiceSupabase();
-  if (!sb || !jobId || isLocalJobId(jobId)) return null;
+  if (!sb || !jobId || !userId || !/^[0-9a-f-]{36}$/i.test(jobId)) return null;
   const { data, error } = await sb
     .from("map_jobs")
-    .select("id, status, session_id, map_spec, uploaded_data, paid_revisions_used")
+    .select("id, user_id, created_at, map_spec, uploaded_data, revision_count")
     .eq("id", jobId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error || !data) return null;
-  return { ...data, status: normalizeStatus(data.status), paid_revisions_used: data.paid_revisions_used ?? 0 } as JobRow;
+  return { ...data, revision_count: data.revision_count ?? 0 } as JobRow;
 }
 
-/**
- * Move a job to `to` if the state machine allows it from its current status. The
- * update only applies while the status is still what we read, so concurrent
- * webhooks, redirects and credit spends can't overwrite each other.
- */
-export async function advanceJob(
-  jobId: string,
-  to: JobStatus,
-  extra: Record<string, unknown> = {},
-): Promise<{ ok: boolean; status: JobStatus | null }> {
+export interface JobSummary {
+  id: string;
+  created_at: string;
+  title: string;
+  mapType: string | null;
+  style: string | null;
+  region: string | null;
+}
+
+/** The user's maps, newest first. */
+export async function listOwnJobs(userId: string, limit = 60): Promise<JobSummary[]> {
   const sb = getServiceSupabase();
-  if (!sb || !jobId || isLocalJobId(jobId)) return { ok: false, status: null };
-  const { data: row } = await sb.from("map_jobs").select("status").eq("id", jobId).maybeSingle();
-  if (!row) return { ok: false, status: null };
-  const from = normalizeStatus(row.status);
-  if (from === to && Object.keys(extra).length === 0) return { ok: true, status: from };
-  if (!canTransition(from, to)) return { ok: false, status: from };
-  const { data: updated } = await sb
+  if (!sb) return [];
+  const { data } = await sb
     .from("map_jobs")
-    .update({ status: to, ...extra })
-    .eq("id", jobId)
-    .eq("status", row.status)
-    .select("status");
-  return updated?.length ? { ok: true, status: to } : { ok: false, status: from };
+    .select("id, created_at, map_spec")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []).map((r) => {
+    const s = (r.map_spec ?? {}) as { title?: string; mapType?: string; style?: string; geography?: { region?: string } };
+    return {
+      id: r.id as string,
+      created_at: r.created_at as string,
+      title: s.title ?? "Untitled map",
+      mapType: s.mapType ?? null,
+      style: s.style ?? null,
+      region: s.geography?.region ?? null,
+    };
+  });
 }
-
-/**
- * Ask Stripe directly whether a Checkout Session paid for this job. Used when the
- * customer lands back on the site before the webhook has arrived.
- */
-export async function verifyCheckout(checkoutSessionId: string, jobId: string): Promise<{ paid: boolean; email?: string; paymentIntent?: string }> {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || !checkoutSessionId.startsWith("cs_")) return { paid: false };
-  try {
-    const s = await new Stripe(key).checkout.sessions.retrieve(checkoutSessionId);
-    const paid = s.payment_status === "paid" && s.metadata?.jobId === jobId;
-    return { paid, email: s.customer_details?.email ?? undefined, paymentIntent: String(s.payment_intent ?? "") };
-  } catch {
-    return { paid: false };
-  }
-}
-
-export { isPaid };

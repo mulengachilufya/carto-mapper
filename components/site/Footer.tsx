@@ -19,10 +19,11 @@ const COLUMNS = [
     ],
   },
   {
-    title: "Buy",
+    title: "Account",
     links: [
-      { href: "/#pricing", label: "Pricing" },
-      { href: "/download", label: "Your downloads" },
+      { href: "/#free", label: "Free, 10 maps a day" },
+      { href: "/signup", label: "Create an account" },
+      { href: "/account", label: "My maps" },
     ],
   },
 ];

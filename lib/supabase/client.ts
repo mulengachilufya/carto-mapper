@@ -1,10 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * Browser Supabase client (anon key). Null when env vars are absent so the app
- * still runs locally before any keys are configured.
+ * Browser Supabase client. Cookie-backed (not localStorage) so the server sees the
+ * same session. Null when accounts aren't configured — the site then runs open.
  */
-export const browserSupabase = url && anon ? createClient(url, anon) : null;
+export const browserSupabase = url && anon ? createBrowserClient(url, anon) : null;

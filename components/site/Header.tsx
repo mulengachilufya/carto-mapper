@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { CompassMark } from "./CompassMark";
+import { AccountNav } from "./AccountNav";
 
 const NAV = [
   { href: "/atlas", label: "The Atlas" },
   { href: "/#styles", label: "Map styles" },
   { href: "/#how", label: "How it works" },
   { href: "/#who", label: "Who it's for" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/#free", label: "Free" },
 ];
 
 export function Header() {
@@ -24,12 +25,7 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <Link
-          href="/create"
-          className="inline-flex h-10 items-center rounded-full bg-atlas-deep px-5 text-sm font-medium text-atlas-paper transition-colors hover:bg-atlas-ocean"
-        >
-          Make a map
-        </Link>
+        <AccountNav />
       </div>
     </header>
   );
