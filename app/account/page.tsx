@@ -25,7 +25,7 @@ export default async function AccountPage() {
         <div className="mx-auto w-full max-w-6xl px-5 py-12 lg:px-8 lg:py-16">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
-              <p className="eyebrow text-atlas-ocean">Your atlas</p>
+              <p className="eyebrow text-atlas-leather">Your atlas</p>
               <h1 className="display mt-2 text-4xl font-semibold text-atlas-ink sm:text-5xl">
                 {firstName ? `${firstName}'s maps` : "My maps"}
               </h1>
@@ -38,7 +38,7 @@ export default async function AccountPage() {
               </p>
               <div className="mt-3 flex gap-1" aria-hidden>
                 {Array.from({ length: usage.limit }, (_, i) => (
-                  <span key={i} className={`h-1.5 flex-1 rounded-full ${i < usage.used ? "bg-atlas-ocean" : "bg-atlas-rule"}`} />
+                  <span key={i} className={`h-1.5 flex-1 rounded-full ${i < usage.used ? "bg-atlas-moss" : "bg-atlas-rule"}`} />
                 ))}
               </div>
               <p className="mt-2 text-xs text-atlas-ink-2">
@@ -52,7 +52,7 @@ export default async function AccountPage() {
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
               href="/create"
-              className="inline-flex h-11 items-center rounded-full bg-atlas-deep px-6 text-sm font-medium text-atlas-paper transition-colors hover:bg-atlas-ocean"
+              className="inline-flex h-11 items-center rounded-full bg-atlas-forest px-6 text-sm font-medium text-atlas-paper transition-colors hover:bg-atlas-moss"
             >
               + Make a new map
             </Link>

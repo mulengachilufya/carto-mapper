@@ -40,7 +40,7 @@ export function Audiences() {
           eyebrow="Who it's for"
           title={
             <>
-              For anyone with a place and a question. <em className="font-normal text-atlas-ocean">No GIS required.</em>
+              For anyone with a place and a question. <em className="font-normal text-atlas-leather">No GIS required.</em>
             </>
           }
           sub="Hiring a cartographer takes weeks; desktop GIS takes months to learn. CartoMapper gives anyone the finished map in minutes."

@@ -20,7 +20,7 @@ export function Header() {
         </Link>
         <nav className="hidden items-center gap-7 text-sm text-atlas-ink-2 lg:flex">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="transition-colors hover:text-atlas-ocean">
+            <Link key={n.href} href={n.href} className="transition-colors hover:text-atlas-moss">
               {n.label}
             </Link>
           ))}

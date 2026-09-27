@@ -41,7 +41,7 @@ export function Faq() {
             <details key={f.q} className="group py-6">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-6 text-lg font-medium text-atlas-ink">
                 {f.q}
-                <span className="text-2xl font-light text-atlas-ocean transition-transform group-open:rotate-45">+</span>
+                <span className="text-2xl font-light text-atlas-moss transition-transform group-open:rotate-45">+</span>
               </summary>
               <p className="mt-3 max-w-2xl leading-relaxed text-atlas-ink-2">{f.a}</p>
             </details>

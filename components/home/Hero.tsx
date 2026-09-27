@@ -11,7 +11,7 @@ const PROOF = [
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-atlas-night text-atlas-paper">
+    <section className="relative overflow-hidden bg-atlas-pine text-atlas-paper">
       <Image
         src="/media/hero-earth.jpg"
         alt="The Earth seen from orbit, oceans and cloud bands curving over the horizon"
@@ -21,8 +21,8 @@ export function Hero() {
         className="drift object-cover object-[60%_20%]"
       />
       {/* Legibility: night falls from the left and the bottom */}
-      <div className="absolute inset-0 bg-gradient-to-r from-atlas-night via-atlas-night/80 to-atlas-night/10" />
-      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-atlas-night to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-atlas-pine via-atlas-pine/80 to-atlas-pine/10" />
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-atlas-pine to-transparent" />
 
       <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-16 pt-12 lg:grid-cols-[1fr_1.05fr] lg:px-8 lg:pb-20 lg:pt-14">
         <div>
@@ -30,7 +30,7 @@ export function Hero() {
             <span className="h-1.5 w-1.5 rounded-full bg-atlas-ochre" /> The atlas, on demand
           </p>
           <h1 className="display mt-5 text-[2.6rem] font-semibold leading-[1.02] sm:text-[3.4rem] lg:text-[3.6rem] xl:text-[4rem]">
-            Any place on Earth. Any data. <em className="font-normal text-atlas-sea">An atlas-grade map</em> in three
+            Any place on Earth. Any data. <em className="font-normal text-atlas-sage">An atlas-grade map</em> in three
             minutes.
           </h1>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-atlas-paper/80">
@@ -40,7 +40,7 @@ export function Hero() {
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Link
               href="/create"
-              className="inline-flex h-[3.25rem] items-center rounded-full bg-atlas-ochre px-8 text-base font-semibold text-atlas-night transition-colors hover:bg-[#d89c4b]"
+              className="inline-flex h-[3.25rem] items-center rounded-full bg-atlas-leather px-8 text-base font-semibold text-atlas-paper transition-colors hover:bg-atlas-leather-2"
             >
               Make my map — it’s free
             </Link>
@@ -62,7 +62,7 @@ export function Hero() {
         </div>
       </div>
 
-      <div className="relative border-t border-atlas-paper/10 bg-atlas-night/70 backdrop-blur-sm">
+      <div className="relative border-t border-atlas-paper/10 bg-atlas-pine/70 backdrop-blur-sm">
         <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-y-6 px-5 py-7 lg:grid-cols-4 lg:px-8">
           {PROOF.map(([n, label]) => (
             <div key={label} className="pr-6">

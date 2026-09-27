@@ -40,20 +40,20 @@ export function ScaleJourney() {
           eyebrow="From orbit to street"
           title={
             <>
-              One engine. <em className="font-normal text-atlas-ocean">Every scale.</em>
+              One engine. <em className="font-normal text-atlas-leather">Every scale.</em>
             </>
           }
           sub="Whether your story spans the planet or a single district, CartoMapper picks the projection, the level of detail and the reference layers a professional cartographer would."
         />
         <ol className="relative mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* the zoom line */}
-          <div aria-hidden className="absolute left-0 right-0 top-[7.5rem] hidden border-t border-dashed border-atlas-ocean/40 lg:block" />
+          <div aria-hidden className="absolute left-0 right-0 top-[7.5rem] hidden border-t border-dashed border-atlas-moss/40 lg:block" />
           {SCALES.map((s, i) => (
             <li key={s.title} className="relative">
               <div className="photo plate aspect-[4/5]" style={{ transform: `rotate(${[-1.2, 0.8, -0.6, 1][i]}deg)` }}>
                 <Image src={s.img} alt={s.alt} fill sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" className="object-cover p-[10px]" />
               </div>
-              <p className="mt-6 font-mono text-xs tracking-wider text-atlas-ocean">{s.ratio}</p>
+              <p className="mt-6 font-mono text-xs tracking-wider text-atlas-moss">{s.ratio}</p>
               <h3 className="display mt-1.5 text-2xl font-semibold text-atlas-ink">{s.title}</h3>
               <p className="mt-2 leading-relaxed text-atlas-ink-2">{s.body}</p>
             </li>

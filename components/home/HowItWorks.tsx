@@ -35,7 +35,7 @@ const DECISIONS = [
 
 export function HowItWorks() {
   return (
-    <section id="how" className="relative overflow-hidden bg-atlas-deep py-24 text-atlas-paper lg:py-32">
+    <section id="how" className="relative overflow-hidden bg-atlas-forest py-24 text-atlas-paper lg:py-32">
       <div className="mx-auto grid max-w-7xl gap-16 px-5 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
           <SectionHeading
@@ -43,7 +43,7 @@ export function HowItWorks() {
             eyebrow="How it works"
             title={
               <>
-                From a sentence to a <em className="font-normal text-atlas-sea">printed plate.</em>
+                From a sentence to a <em className="font-normal text-atlas-sage">printed plate.</em>
               </>
             }
             sub="Free from the first sentence to the final PDF. Sign up once, then make up to ten maps a day."
@@ -57,14 +57,14 @@ export function HowItWorks() {
           <ol className="relative space-y-10 border-l border-atlas-paper/15 pl-10">
             {STEPS.map((s, i) => (
               <li key={s.title} className="relative">
-                <span className="absolute -left-[3.05rem] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-atlas-ochre/60 bg-atlas-deep font-mono text-xs text-atlas-ochre">
+                <span className="absolute -left-[3.05rem] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-atlas-ochre/60 bg-atlas-forest font-mono text-xs text-atlas-ochre">
                   {i + 1}
                 </span>
                 <div className="flex flex-wrap items-center gap-3">
                   <h3 className="display text-2xl font-semibold">{s.title}</h3>
                   <span
                     className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider ${
-                      s.gate === "Yours" ? "bg-atlas-green/80 text-atlas-night" : "border border-atlas-paper/25 text-atlas-paper/70"
+                      s.gate === "Yours" ? "bg-atlas-green/80 text-atlas-pine" : "border border-atlas-paper/25 text-atlas-paper/70"
                     }`}
                   >
                     {s.gate}
@@ -80,7 +80,7 @@ export function HowItWorks() {
             <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
               {DECISIONS.map(([k, v]) => (
                 <div key={k} className="flex gap-3">
-                  <dt className="w-24 shrink-0 font-mono text-xs uppercase tracking-wider text-atlas-sea/80">{k}</dt>
+                  <dt className="w-24 shrink-0 font-mono text-xs uppercase tracking-wider text-atlas-sage/80">{k}</dt>
                   <dd className="text-sm text-atlas-paper/75">{v}</dd>
                 </div>
               ))}

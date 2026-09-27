@@ -10,9 +10,9 @@ import { CompassMark } from "@/components/site/CompassMark";
 export function AuthShell({ title, sub, children, footer }: { title: string; sub?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="grid min-h-screen bg-atlas-paper lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-atlas-night text-atlas-paper lg:block">
+      <aside className="relative hidden overflow-hidden bg-atlas-pine text-atlas-paper lg:block">
         <Image src="/media/topo-brazil.jpg" alt="A shaded-relief topographic map" fill sizes="50vw" preload className="object-cover opacity-70" />
-        <div className="absolute inset-0 bg-gradient-to-t from-atlas-night via-atlas-night/35 to-atlas-night/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-atlas-pine via-atlas-pine/35 to-atlas-pine/10" />
         <div className="relative flex h-full flex-col justify-between p-12">
           <Link href="/" className="flex items-center gap-2.5">
             <CompassMark />
@@ -21,12 +21,12 @@ export function AuthShell({ title, sub, children, footer }: { title: string; sub
           <div className="max-w-md">
             <p className="eyebrow text-atlas-ochre">Free, for everyone</p>
             <p className="display mt-4 text-4xl font-semibold leading-tight">
-              Any place on Earth. <em className="font-normal text-atlas-sea">An atlas-grade map</em> in three minutes.
+              Any place on Earth. <em className="font-normal text-atlas-sage">An atlas-grade map</em> in three minutes.
             </p>
             <ul className="mt-8 space-y-2.5 text-atlas-paper/80">
               {["Up to 10 new maps every day", "Print-ready PDF and SVG, no watermark", "Your maps saved to your account"].map((t) => (
                 <li key={t} className="flex items-center gap-3">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-atlas-green/80 text-[11px] text-atlas-night">✓</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-atlas-green/80 text-[11px] text-atlas-pine">✓</span>
                   {t}
                 </li>
               ))}
@@ -53,7 +53,7 @@ export function AuthShell({ title, sub, children, footer }: { title: string; sub
 }
 
 export const fieldClass =
-  "w-full rounded-lg border border-atlas-rule bg-white/70 px-3.5 py-2.5 text-[15px] text-atlas-ink outline-none transition-colors placeholder:text-atlas-ink-2/50 focus:border-atlas-ocean focus:ring-1 focus:ring-atlas-ocean";
+  "w-full rounded-lg border border-atlas-rule bg-white/70 px-3.5 py-2.5 text-[15px] text-atlas-ink outline-none transition-colors placeholder:text-atlas-ink-2/50 focus:border-atlas-moss focus:ring-1 focus:ring-atlas-moss";
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -70,7 +70,7 @@ export function SubmitButton({ busy, children }: { busy: boolean; children: Reac
     <button
       type="submit"
       disabled={busy}
-      className="inline-flex h-12 w-full items-center justify-center rounded-full bg-atlas-deep text-[15px] font-semibold text-atlas-paper transition-colors hover:bg-atlas-ocean disabled:opacity-60"
+      className="inline-flex h-12 w-full items-center justify-center rounded-full bg-atlas-forest text-[15px] font-semibold text-atlas-paper transition-colors hover:bg-atlas-moss disabled:opacity-60"
     >
       {children}
     </button>

@@ -36,8 +36,8 @@ export function CompassMark() {
   return (
     <span ref={wrapRef} className="inline-flex">
       <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden>
-        <circle cx="32" cy="32" r="29.5" stroke="var(--color-atlas-ochre)" strokeWidth="2.6" />
-        <g stroke="var(--color-atlas-ocean)" strokeWidth="0.8" opacity="0.35">
+        <circle cx="32" cy="32" r="29.5" stroke="var(--color-atlas-leather)" strokeWidth="2.6" />
+        <g stroke="var(--color-atlas-forest)" strokeWidth="0.8" opacity="0.35">
           <circle cx="32" cy="32" r="21" />
           <ellipse cx="32" cy="32" rx="10.5" ry="21" />
           <line x1="32" y1="11" x2="32" y2="53" />
@@ -65,11 +65,11 @@ export function CompassMark() {
           ref={needleRef}
           style={{ transformOrigin: "32px 32px", transition: "transform 0.5s cubic-bezier(0.2,0.7,0.2,1)" }}
         >
-          <polygon points="32,6.5 37.2,32 26.8,32" fill="var(--color-atlas-ochre)" />
+          <polygon points="32,6.5 37.2,32 26.8,32" fill="var(--color-atlas-leather)" />
           <polygon points="32,6.5 32,32 26.8,32" fill="var(--color-atlas-paper)" opacity="0.42" />
-          <polygon points="26.8,32 37.2,32 32,57.5" fill="var(--color-atlas-deep)" />
+          <polygon points="26.8,32 37.2,32 32,57.5" fill="var(--color-atlas-forest)" />
         </g>
-        <circle cx="32" cy="32" r="3" fill="var(--color-atlas-paper)" stroke="var(--color-atlas-ochre)" strokeWidth="1.5" />
+        <circle cx="32" cy="32" r="3" fill="var(--color-atlas-paper)" stroke="var(--color-atlas-leather)" strokeWidth="1.5" />
       </svg>
     </span>
   );

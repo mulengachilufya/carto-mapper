@@ -30,7 +30,7 @@ const COLUMNS = [
 
 export function Footer() {
   return (
-    <footer className="relative mt-auto overflow-hidden bg-atlas-night text-atlas-paper">
+    <footer className="relative mt-auto overflow-hidden bg-atlas-pine text-atlas-paper">
       <Image src="/media/world-mono.png" alt="" fill sizes="100vw" className="object-cover opacity-[0.06]" />
       <div className="relative mx-auto max-w-7xl px-5 py-14 lg:px-8">
         <div className="grid gap-10 md:grid-cols-[1.4fr_2fr]">

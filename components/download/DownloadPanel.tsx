@@ -99,7 +99,7 @@ export function DownloadPanel() {
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow text-atlas-ocean">Ready to print</p>
+          <p className="eyebrow text-atlas-leather">Ready to print</p>
           <h1 className="display mt-2 text-3xl font-semibold text-ink sm:text-4xl">{stash.title}</h1>
         </div>
         <div className="flex flex-wrap gap-3">

@@ -12,7 +12,7 @@ export default function LoginPage() {
       footer={
         <>
           New to CartoMapper?{" "}
-          <Link href="/signup" className="font-medium text-atlas-ocean hover:underline">
+          <Link href="/signup" className="font-medium text-atlas-moss hover:underline">
             Create a free account
           </Link>
         </>

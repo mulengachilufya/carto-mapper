@@ -20,7 +20,7 @@ export function Free() {
             eyebrow="Free"
             title={
               <>
-                Free for everyone. <em className="font-normal text-atlas-ocean">No premium, no catch.</em>
+                Free for everyone. <em className="font-normal text-atlas-leather">No premium, no catch.</em>
               </>
             }
             sub="Maps should be for everyone who needs one — the district health officer, the geography teacher, the student with a thesis due. Make a free account and you have the whole studio."
@@ -37,7 +37,7 @@ export function Free() {
 
         <div className="plate lg:mt-6">
           <div className="p-8">
-            <p className="eyebrow text-atlas-ocean">The only limit</p>
+            <p className="eyebrow text-atlas-leather">The only limit</p>
             <p className="display mt-3 text-6xl font-semibold text-atlas-ink">
               {DAILY_MAP_LIMIT}
               <span className="ml-2 text-2xl font-normal text-atlas-ink-2">new maps a day</span>
@@ -63,7 +63,7 @@ export function Free() {
             </p>
             <Link
               href="/signup"
-              className="mt-7 inline-flex h-12 w-full items-center justify-center rounded-full bg-atlas-deep text-[15px] font-semibold text-atlas-paper transition-colors hover:bg-atlas-ocean"
+              className="mt-7 inline-flex h-12 w-full items-center justify-center rounded-full bg-atlas-forest text-[15px] font-semibold text-atlas-paper transition-colors hover:bg-atlas-moss"
             >
               Create your free account
             </Link>

@@ -234,7 +234,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
 }
 
 const SOURCE: Record<Decision["by"], { label: string; cls: string }> = {
-  brief: { label: "Your brief", cls: "bg-atlas-sea/60 text-atlas-deep" },
+  brief: { label: "Your brief", cls: "bg-atlas-sage/60 text-atlas-forest" },
   data: { label: "Your data", cls: "bg-atlas-green/25 text-atlas-ink" },
   rules: { label: "Rulebook", cls: "bg-atlas-card text-atlas-ink-2 border border-line" },
   ai: { label: "AI cartographer", cls: "bg-atlas-ochre/25 text-atlas-ink" },

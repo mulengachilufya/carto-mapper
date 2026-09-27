@@ -16,7 +16,7 @@ export function SectionHeading({
   const dark = tone === "dark";
   return (
     <div className={`max-w-3xl ${align === "center" ? "mx-auto text-center" : ""}`}>
-      <p className={`eyebrow ${dark ? "text-atlas-ochre" : "text-atlas-ocean"}`}>{eyebrow}</p>
+      <p className={`eyebrow ${dark ? "text-atlas-ochre" : "text-atlas-leather"}`}>{eyebrow}</p>
       <h2 className={`display mt-3 text-4xl font-semibold leading-[1.05] sm:text-5xl ${dark ? "text-atlas-paper" : "text-atlas-ink"}`}>
         {title}
       </h2>

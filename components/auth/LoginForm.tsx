@@ -69,7 +69,7 @@ export function LoginForm() {
         <input className={fieldClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
       </Field>
       <div className="-mt-1 text-right text-sm">
-        <Link href="/forgot-password" className="text-atlas-ocean hover:underline">
+        <Link href="/forgot-password" className="text-atlas-moss hover:underline">
           Forgot your password?
         </Link>
       </div>

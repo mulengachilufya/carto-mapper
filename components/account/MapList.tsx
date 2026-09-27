@@ -49,7 +49,7 @@ export function MapList({ maps: initial }: { maps: JobSummary[] }) {
             <Link href={`/download?job=${encodeURIComponent(m.id)}`} className="block">
               <div className="h-24" style={{ background: STYLE_SWATCH[m.style ?? "atlas"] ?? STYLE_SWATCH.atlas }} />
               <div className="p-5">
-                <p className="display line-clamp-2 text-lg font-semibold leading-snug text-atlas-ink group-hover:text-atlas-ocean">{m.title}</p>
+                <p className="display line-clamp-2 text-lg font-semibold leading-snug text-atlas-ink group-hover:text-atlas-moss">{m.title}</p>
                 <p className="mt-1.5 text-sm text-atlas-ink-2">
                   {[m.region, m.mapType ? TYPE_LABEL[m.mapType] ?? m.mapType : null].filter(Boolean).join(" · ")}
                 </p>
@@ -60,7 +60,7 @@ export function MapList({ maps: initial }: { maps: JobSummary[] }) {
                 {new Date(m.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
               </time>
               <span className="flex gap-4">
-                <Link href={`/download?job=${encodeURIComponent(m.id)}`} className="font-medium text-atlas-ocean hover:underline">
+                <Link href={`/download?job=${encodeURIComponent(m.id)}`} className="font-medium text-atlas-moss hover:underline">
                   Download
                 </Link>
                 <button type="button" onClick={() => remove(m)} className="hover:text-red-700">

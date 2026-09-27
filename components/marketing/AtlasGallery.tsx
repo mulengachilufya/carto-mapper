@@ -67,7 +67,7 @@ export function SpecimenPlate({ id, caption = true, className }: { id: string; c
       </div>
       {caption && (
         <figcaption className="mt-3 flex items-baseline gap-3 text-sm">
-          <span className="eyebrow shrink-0 text-atlas-ocean">Plate {String(index + 1).padStart(2, "0")}</span>
+          <span className="eyebrow shrink-0 text-atlas-leather">Plate {String(index + 1).padStart(2, "0")}</span>
           <span className="text-atlas-ink-2">
             <span className="font-medium text-atlas-ink">{s.title}.</span> {s.note}
           </span>

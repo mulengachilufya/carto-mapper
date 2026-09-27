@@ -56,7 +56,7 @@ export function Styles() {
           eyebrow="Three looks, one engine"
           title={
             <>
-              The atlases you grew up with — <em className="font-normal text-atlas-ocean">now for your data.</em>
+              The atlases you grew up with — <em className="font-normal text-atlas-leather">now for your data.</em>
             </>
           }
           sub="Pick a look, or let the engine choose. Every style carries the same cartographic rigour: equal-area projections, a real scale bar, labels that never collide."
@@ -66,7 +66,7 @@ export function Styles() {
           {STYLES.map((s, i) => (
             <article key={s.name} className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
               <div className={`min-w-0 ${i % 2 ? "lg:order-2" : ""}`}>
-                <p className="eyebrow text-atlas-ocean">
+                <p className="eyebrow text-atlas-leather">
                   Style {String(i + 1).padStart(2, "0")} · {s.tag}
                 </p>
                 <h3 className="display mt-3 text-5xl font-semibold text-atlas-ink">{s.name}</h3>

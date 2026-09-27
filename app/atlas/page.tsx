@@ -13,13 +13,13 @@ export default function AtlasPage() {
     <>
       <Header />
       <main className="flex-1">
-        <section className="relative overflow-hidden bg-atlas-night text-atlas-paper">
+        <section className="relative overflow-hidden bg-atlas-pine text-atlas-paper">
           <Image src="/media/figure-09.jpg" alt="" fill preload sizes="100vw" className="object-cover opacity-45" />
-          <div className="absolute inset-0 bg-gradient-to-r from-atlas-night via-atlas-night/70 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-atlas-pine via-atlas-pine/70 to-transparent" />
           <div className="relative mx-auto max-w-7xl px-5 py-24 lg:px-8 lg:py-32">
             <p className="eyebrow text-atlas-ochre">The Atlas</p>
             <h1 className="display mt-4 max-w-3xl text-5xl font-semibold leading-[1.02] sm:text-7xl">
-              Plates from <em className="font-normal text-atlas-sea">every corner</em> of the Earth.
+              Plates from <em className="font-normal text-atlas-sage">every corner</em> of the Earth.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-atlas-paper/75">
               Each plate is rendered live in your browser by the engine that will draw your map — terrain fetched,

@@ -5,9 +5,9 @@ import { SectionHeading } from "./SectionHeading";
 
 export function AtlasTeaser() {
   return (
-    <section className="relative overflow-hidden bg-atlas-night py-24 text-atlas-paper lg:py-32">
+    <section className="relative overflow-hidden bg-atlas-pine py-24 text-atlas-paper lg:py-32">
       <Image src="/media/atlas-gold.jpg" alt="" fill sizes="100vw" className="object-cover opacity-55" />
-      <div className="absolute inset-0 bg-gradient-to-b from-atlas-night/85 via-atlas-night/55 to-atlas-night/90" />
+      <div className="absolute inset-0 bg-gradient-to-b from-atlas-pine/85 via-atlas-pine/55 to-atlas-pine/90" />
       <div className="relative mx-auto max-w-7xl px-5 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <SectionHeading
@@ -15,7 +15,7 @@ export function AtlasTeaser() {
             eyebrow="The Atlas"
             title={
               <>
-                Plates drawn by the engine — <em className="font-normal text-atlas-sea">not by hand.</em>
+                Plates drawn by the engine — <em className="font-normal text-atlas-sage">not by hand.</em>
               </>
             }
             sub="Every plate in the Atlas is rendered live, in your browser, by the same engine that will draw your map."

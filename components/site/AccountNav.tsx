@@ -27,7 +27,7 @@ export function AccountNav() {
   const cta = (
     <Link
       href="/create"
-      className="inline-flex h-10 items-center rounded-full bg-atlas-deep px-5 text-sm font-medium text-atlas-paper transition-colors hover:bg-atlas-ocean"
+      className="inline-flex h-10 items-center rounded-full bg-atlas-forest px-5 text-sm font-medium text-atlas-paper transition-colors hover:bg-atlas-moss"
     >
       Make a map
     </Link>
@@ -39,14 +39,14 @@ export function AccountNav() {
   return (
     <div className="flex items-center gap-3">
       {who ? (
-        <Link href="/account" title={who.email} className="flex items-center gap-2 text-sm text-atlas-ink-2 hover:text-atlas-ocean">
+        <Link href="/account" title={who.email} className="flex items-center gap-2 text-sm text-atlas-ink-2 hover:text-atlas-moss">
           <span className="hidden sm:inline">My maps</span>
           <span className="flex h-9 w-9 items-center justify-center rounded-full border border-atlas-rule bg-atlas-card font-mono text-xs font-semibold text-atlas-ink">
             {who.initials}
           </span>
         </Link>
       ) : (
-        <Link href="/login" className="text-sm text-atlas-ink-2 transition-colors hover:text-atlas-ocean">
+        <Link href="/login" className="text-sm text-atlas-ink-2 transition-colors hover:text-atlas-moss">
           Sign in
         </Link>
       )}
