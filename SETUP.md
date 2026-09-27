@@ -26,6 +26,7 @@ saving, no daily limit, and the map designer uses the built-in rules engine unle
 | [Netlify](https://netlify.com) | hosting | **Yes** |
 | [Supabase](https://supabase.com) | accounts, saved maps, the daily limit | **Yes** — a **new** project for CartoMapper, not the Lenga Maps one |
 | [Anthropic](https://console.anthropic.com) | the AI cartographer | Recommended (the rules engine works without it) |
+| [Resend](https://resend.com) | the welcome email | Recommended (sign-up works without it) |
 
 ---
 
@@ -36,19 +37,24 @@ saving, no daily limit, and the map designer uses the built-in rules engine unle
    the sign-up form by a trigger) and `map_jobs` (each saved map, owned by a user), with
    row-level security on and no public policies — only the server touches them. Safe to
    re-run; it also upgrades a database from the old paid version.
-3. **Authentication → Sign In / Providers → Email**: enabled.
-   - *Confirm email* **on** (recommended): people confirm from their inbox, then land
-     straight in the map maker. *Off*: they're signed in immediately after sign-up.
+3. **Authentication → Sign In / Providers → Email**: enabled, and **Confirm email off**.
+   People are signed in the moment they register and go straight to the map maker.
 4. **Authentication → URL Configuration**:
-   - *Site URL*: your live URL, e.g. `https://cartomapper.netlify.app`
-   - *Redirect URLs*: add `https://cartomapper.netlify.app/auth/callback`
+   - *Site URL*: `https://cartomapper.online`
+   - *Redirect URLs*: add `https://cartomapper.online/auth/callback`
      (and `http://localhost:3000/auth/callback` for local testing). Deploy previews:
      `https://*--cartomapper.netlify.app/auth/callback`.
-5. **Authentication → Emails → SMTP**: Supabase's built-in mailer only sends a few emails
-   an hour — fine for testing, not for launch. Add your own SMTP (Resend, Postmark, Gmail
-   Workspace…) before you announce the site.
+5. Supabase's built-in mailer then only sends password-reset emails; its few-per-hour
+   limit is fine for that. No custom SMTP needed.
 6. **Project Settings → API**: copy the URL, the `anon` key and the `service_role` key
    into the environment variables below.
+
+**Welcome email** (`lib/email.ts`): every new account gets one welcome email, sent by
+the site through [Resend](https://resend.com) (the same service Lenga Maps uses). In
+Resend: **Domains → Add domain** → `cartomapper.online`, add the DNS records it shows,
+then **API Keys → Create** and set `RESEND_API_KEY` in Netlify. The sender defaults to
+`CartoMapper <hello@cartomapper.online>` (override with `RESEND_FROM`). Without the key,
+sign-up still works; the welcome email is just skipped.
 
 **How the limit works** (`lib/quota.ts`, `app/api/generate-spec/route.ts`): every new map
 is a row in `map_jobs`; before the map designer runs, the server counts the user's rows from
@@ -68,6 +74,7 @@ with Supabase Auth on every request — the limit can't be bypassed from the bro
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
      — all three switch accounts on; with any missing the site runs open
    - `ANTHROPIC_API_KEY` *(recommended)*
+   - `RESEND_API_KEY` *(for the welcome email)*
 4. **Deploy.** Old `STRIPE_*` variables can be deleted.
 
 ---

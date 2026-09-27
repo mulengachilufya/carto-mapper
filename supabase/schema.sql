@@ -14,8 +14,10 @@ create table if not exists profiles (
   first_name text,
   last_name text,
   country text,
-  role text -- lib/profile-options.ts ROLES: ngo | government | research | teacher | student | business | media | gis | other
+  role text, -- lib/profile-options.ts ROLES: ngo | government | research | teacher | student | business | media | gis | other
+  welcome_email_sent_at timestamptz -- set once the welcome email has gone out (lib/email.ts)
 );
+alter table profiles add column if not exists welcome_email_sent_at timestamptz;
 
 create or replace function public.handle_new_user()
 returns trigger

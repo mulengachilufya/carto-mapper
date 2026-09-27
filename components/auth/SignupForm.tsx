@@ -50,7 +50,11 @@ export function SignupForm() {
       return setError(/already registered|already exists/i.test(err.message) ? "That email already has an account — sign in instead." : err.message);
     }
     // Email confirmation off: signed in now. On: they confirm from their inbox first.
-    if (data.session) window.location.assign(next);
+    if (data.session) {
+      // Signed in straight away (email confirmation off): send the welcome email, then go.
+      await fetch("/api/account/welcome", { method: "POST" }).catch(() => {});
+      window.location.assign(next);
+    }
     else {
       setSentTo(email.trim());
       setBusy(false);

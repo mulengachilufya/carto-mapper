@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { accountsEnabled, createServerSupabase } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safe-redirect";
+import { sendWelcomeIfNew } from "@/lib/email";
 
 /**
  * Landing page for links in Supabase emails (confirm sign-up, reset password).
@@ -26,6 +27,11 @@ export async function GET(req: NextRequest) {
   if (error) {
     console.error("[auth/callback] sign-in from email link failed:", error);
     return NextResponse.redirect(new URL("/login?error=expired_link", url.origin));
+  }
+  // If email confirmation is ever switched on, the welcome goes out once the address is confirmed.
+  if (type !== "recovery") {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) await sendWelcomeIfNew(data.user).catch(() => false);
   }
   return NextResponse.redirect(new URL(type === "recovery" ? "/reset-password" : next, url.origin));
 }
