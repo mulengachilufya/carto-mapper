@@ -54,11 +54,6 @@ It's free. You can make up to ${DAILY_MAP_LIMIT} new maps a day, change them as 
 
 Make your first map: ${cta}
 
-A few to try:
-  - Provinces of Zambia
-  - Rainfall by district in Malawi
-  - Where we work: Kenya, Uganda and Tanzania
-
 Happy mapping,
 The CartoMapper team`;
 
@@ -70,7 +65,7 @@ The CartoMapper team`;
   <tr><td style="background:#0e2620;padding:14px 20px;">
     <img src="${APP_URL}/brand/cartomapper-logo-reversed.png" alt="CartoMapper" width="220" style="display:block;border:0;max-width:220px;height:auto;">
   </td></tr>
-  <tr><td style="padding:32px 32px 8px;">
+  <tr><td style="padding:32px 32px 32px;">
     <h1 style="margin:0 0 16px;font-size:26px;line-height:1.25;color:#1c1a17;font-weight:600;">Welcome, ${esc(name)}.</h1>
     <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4a443b;">
       Your CartoMapper account is ready. Describe any place on Earth in a sentence, add whatever data you have, and
@@ -83,12 +78,6 @@ The CartoMapper team`;
     <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#8b2e26;border-radius:999px;">
       <a href="${cta}" style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#fbf8f0;text-decoration:none;">Make your first map</a>
     </td></tr></table>
-  </td></tr>
-  <tr><td style="padding:24px 32px 28px;">
-    <p style="margin:0 0 8px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c68a3a;">A few to try</p>
-    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.9;color:#4a443b;">
-      Provinces of Zambia<br>Rainfall by district in Malawi<br>Where we work: Kenya, Uganda and Tanzania
-    </p>
   </td></tr>
   <tr><td style="border-top:1px solid #d9ceb6;padding:18px 32px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a7266;">
     You're receiving this because you created a CartoMapper account with ${esc(to)}. Questions? Just reply.
