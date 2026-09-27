@@ -24,21 +24,20 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-r from-atlas-night via-atlas-night/80 to-atlas-night/10" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-atlas-night to-transparent" />
 
-      <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-16 lg:grid-cols-[1fr_1.05fr] lg:px-8 lg:pb-24 lg:pt-24">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-16 pt-12 lg:grid-cols-[1fr_1.05fr] lg:px-8 lg:pb-20 lg:pt-14">
         <div>
           <p className="eyebrow inline-flex items-center gap-2 text-atlas-ochre">
             <span className="h-1.5 w-1.5 rounded-full bg-atlas-ochre" /> The atlas, on demand
           </p>
-          <h1 className="display mt-5 text-[2.9rem] font-semibold leading-[1.02] sm:text-6xl lg:text-[4.4rem]">
+          <h1 className="display mt-5 text-[2.6rem] font-semibold leading-[1.02] sm:text-[3.4rem] lg:text-[3.6rem] xl:text-[4rem]">
             Any place on Earth. Any data. <em className="font-normal text-atlas-sea">An atlas-grade map</em> in three
             minutes.
           </h1>
-          <p className="mt-7 max-w-xl text-lg leading-relaxed text-atlas-paper/80">
-            Describe the map you need and drop in whatever you have — a spreadsheet, a PDF report, a list of towns, a
-            photo of a table. CartoMapper draws it the way the atlases you grew up with did: real terrain, rivers, place
-            names, and a legend that means something.
+          <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-atlas-paper/80">
+            Describe it in a sentence, add any data you have. CartoMapper draws it the way the atlases you grew up with
+            did — real terrain, rivers, place names, and a legend that means something.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <Link
               href="/create"
               className="inline-flex h-[3.25rem] items-center rounded-full bg-atlas-ochre px-8 text-base font-semibold text-atlas-night transition-colors hover:bg-[#d89c4b]"

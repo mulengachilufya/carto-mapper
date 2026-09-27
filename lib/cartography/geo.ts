@@ -32,7 +32,16 @@ export function countriesFromTopology(topo: {
   objects: { countries: { geometries: unknown[] } };
 }): FeatureCollection {
   const fc = feature(topo as never, topo.objects.countries as never) as unknown as FeatureCollection;
-  const adj = neighbors(topo.objects.countries.geometries as never);
+  colourNeighbours(fc, topo.objects.countries.geometries);
+  return fc;
+}
+
+/**
+ * Give each unit a colour index (0–4) that differs from every neighbour's — the
+ * political-atlas tint. Greedy, most-connected first.
+ */
+function colourNeighbours(fc: FeatureCollection, geometries: unknown[]) {
+  const adj = neighbors(geometries as never);
   const order = adj.map((n, i) => [i, n.length]).sort((a, b) => b[1] - a[1]).map(([i]) => i);
   const color = new Array<number>(adj.length).fill(-1);
   for (const i of order) {
@@ -42,9 +51,8 @@ export function countriesFromTopology(topo: {
     color[i] = c % 5;
   }
   fc.features.forEach((f, i) => {
-    (f.properties as CountryProps).mapcolor = color[i];
+    f.properties = { ...(f.properties ?? {}), mapcolor: color[i] };
   });
-  return fc;
 }
 
 export function normalizeName(s: string): string {
@@ -74,6 +82,14 @@ const ALIASES: Record<string, string> = {
   "ivory coast": "cote d ivoire",
   "czech republic": "czechia",
   bosnia: "bosnia and herz",
+  "bosnia and herzegovina": "bosnia and herz",
+  "antigua and barbuda": "antigua and barb",
+  "marshall islands": "marshall is",
+  "solomon islands": "solomon is",
+  "north macedonia": "macedonia",
+  "saint kitts and nevis": "st kitts and nevis",
+  "saint vincent and the grenadines": "st vin and gren",
+  "vatican city": "vatican",
   "central african republic": "central african rep",
   "south sudan": "s sudan",
   "dominican republic": "dominican rep",
@@ -276,7 +292,9 @@ export function loadSubdivisions(
         const res = await fetch(`${baseUrl}/geodata/subdivisions/${entry.iso}-${level}.json`);
         if (!res.ok) return undefined;
         const topo = await res.json();
-        return fixWinding(feature(topo, topo.objects.units) as unknown as FeatureCollection);
+        const fc = feature(topo, topo.objects.units) as unknown as FeatureCollection;
+        colourNeighbours(fc, topo.objects.units.geometries);
+        return fixWinding(fc);
       }).catch(() => undefined),
     );
   }

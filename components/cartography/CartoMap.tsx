@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { geoPath, geoGraticule10, geoContains, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
+import { geoPath, geoGraticule10, geoContains, geoCentroid, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
 import { scaleSqrt } from "d3-scale";
 import type { Feature, FeatureCollection } from "geojson";
 import type { MapSpec, MapStyle } from "@/lib/mapspec/schema";
@@ -216,6 +216,7 @@ function buildMap(
   const isWorld = level === "world";
   const isSymbolMap = SYMBOL_TYPES.has(spec.mapType);
   const isFootprint = spec.mapType === "footprint";
+  const isReference = spec.mapType === "reference";
   const margin = 20 * k;
 
   // ── Data join ──
@@ -245,7 +246,10 @@ function buildMap(
         level,
       )
     : null;
-  const regionUnits: CountryFeature[] = join && join.level !== "country" ? join.features : [];
+  // A reference plate draws the units themselves: the provinces (or districts) of its country.
+  const referenceUnits: CountryFeature[] =
+    isReference && subs ? (((level === "admin2" ? subs.adm2 : subs.adm1)?.features ?? []) as CountryFeature[]) : [];
+  const regionUnits: CountryFeature[] = join && join.level !== "country" ? join.features : referenceUnits;
   const joinable: CountryFeature[] = join?.level === "country" ? drawn : regionUnits;
   const keyOf = (ft: CountryFeature) => join?.keyOf(ft) ?? "";
 
@@ -557,7 +561,11 @@ function buildMap(
     let reliefFill: string | undefined = T.reliefWash ?? "none";
     let stroke = T.border;
     const isFocus = ft === focusFeature;
-    if (countryLevelJoin && (isChoropleth || isDataUnit(ft))) {
+    if (isReference && !focusFeature) {
+      const pastel = REF_PASTELS[(ft.properties.mapcolor ?? 0) % REF_PASTELS.length];
+      fill = style === "minimal" ? T.land : pastel;
+      reliefFill = style === "atlas" ? withAlpha(pastel, 0.42) : "none";
+    } else if (countryLevelJoin && (isChoropleth || isDataUnit(ft))) {
       fill = regionFill(ft);
       // Highlighted countries let the terrain breathe through; choropleth colours stay exact.
       reliefFill = isDataUnit(ft) ? (isFootprint ? withAlpha(fill, 0.78) : fill) : T.reliefWash ?? T.noData;
@@ -568,7 +576,7 @@ function buildMap(
       fill = T.focusLand;
       reliefFill = "none";
     }
-    if (!focusFeature && !countryLevelJoin) reliefFill = "none";
+    if (!focusFeature && !countryLevelJoin && !isReference) reliefFill = "none";
     if (isFocus) reliefFill = "none";
     if (countryLevelJoin && isFootprint && !isDataUnit(ft)) {
       fill = T.pastels ? T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length] : T.land;
@@ -577,16 +585,23 @@ function buildMap(
     return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill, stroke, name: ft.properties.name, data: isDataUnit(ft) };
   });
   // Provinces/districts the data is joined to, drawn over their country.
-  const regions = regionUnits.map((ft) => ({
-    d: pathOf(ft as unknown as GeoPermissibleObjects),
-    fill: regionFill(ft),
-    reliefFill: isChoropleth || isDataUnit(ft) ? regionFill(ft) : "none",
-    name: ft.properties.name,
-  }));
+  const regions = regionUnits.map((ft) => {
+    if (isReference) {
+      const pastel = REF_PASTELS[(ft.properties.mapcolor ?? 0) % REF_PASTELS.length];
+      const fill = style === "minimal" ? (ft.properties.mapcolor ?? 0) % 2 ? "#f1ece0" : "#faf7ef" : pastel;
+      return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill: withAlpha(pastel, 0.42), name: ft.properties.name };
+    }
+    return {
+      d: pathOf(ft as unknown as GeoPermissibleObjects),
+      fill: regionFill(ft),
+      reliefFill: isChoropleth || isDataUnit(ft) ? regionFill(ft) : "none",
+      name: ft.properties.name,
+    };
+  });
   // Province lines for context: on locator/symbol maps, and over district shading.
   const provinceLines =
-    subs?.adm1 && join?.level !== "adm1" ? pathOf(subs.adm1 as unknown as GeoPermissibleObjects) : "";
-  const provinceLineStyle = join?.level === "adm2" && isChoropleth ? "over-districts" : "context";
+    subs?.adm1 && join?.level !== "adm1" && !(isReference && level === "admin1") ? pathOf(subs.adm1 as unknown as GeoPermissibleObjects) : "";
+  const provinceLineStyle = (join?.level === "adm2" && isChoropleth) || (isReference && level === "admin2") ? "over-districts" : "context";
   const focusPath =
     focusFeature && !countryLevelJoin ? pathOf(focusFeature as unknown as GeoPermissibleObjects) : "";
 
@@ -645,6 +660,56 @@ function buildMap(
       ? placeLabels(symbols, 8.5 * k, frame, [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null), k)
       : [];
 
+  // Reference plates name every unit, largest first, in spaced capitals (districts in
+  // small upright type); a name that doesn't fit inside its unit is left off, not squeezed.
+  const unitLabels: MapLabel[] = [];
+  const nameUnits = isReference || (isChoropleth && join?.level === "adm1" && regionUnits.length <= 24);
+  if (nameUnits && f.labels && regionUnits.length) {
+    const blocked: Rect[] = [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null);
+    const adm2 = level === "admin2";
+    const base = (adm2 ? 6.4 : 8.2) * k;
+    const spacing = adm2 ? 0.02 : 0.1;
+    const inner: Rect = { x: frame.x + 4 * k, y: frame.y + 4 * k, w: frame.w - 8 * k, h: frame.h - 8 * k };
+    const within = (r: Rect) => r.x >= inner.x && r.y >= inner.y && r.x + r.w <= inner.x + inner.w && r.y + r.h <= inner.y + inner.h;
+    const sorted = regionUnits
+      .map((ft) => ({ ft, main: mainParts(ft) }))
+      .map((u) => ({ ...u, area: path.area(u.main as unknown as GeoPermissibleObjects) }))
+      .sort((a, c) => c.area - a.area);
+    for (const { ft, main } of sorted) {
+      const name = unitName(ft.properties.name);
+      if (!name) continue;
+      const at = interiorPoint(ft, main);
+      const xy = at && projection(at);
+      if (!xy) continue;
+      const [[bx0, by0], [bx1, by1]] = path.bounds(main as unknown as GeoPermissibleObjects);
+      const text = adm2 ? name : name.toUpperCase();
+      for (const size of [base, base * 0.86, base * 0.74]) {
+        const lines = text.length > 11 && text.includes(" ") ? splitTwo(text) : [text];
+        const w = Math.max(...lines.map((l) => l.length * size * (0.6 + spacing)));
+        const h = lines.length * size * 1.12;
+        if (w > (bx1 - bx0) * 1.08 || h > (by1 - by0) * 0.95) continue;
+        const box: Rect = { x: xy[0] - w / 2, y: xy[1] - h / 2, w, h };
+        if (!within(box) || blocked.some((b2) => intersects(b2, box))) continue;
+        blocked.push(box);
+        unitLabels.push({
+          x: xy[0],
+          y: xy[1] - h / 2 + size * 0.85,
+          text: lines.join("\n"),
+          size,
+          role: "unit",
+          anchor: "middle",
+          letterSpacing: spacing,
+        });
+        break;
+      }
+    }
+  }
+  const unitLabelBoxes: Rect[] = unitLabels.map((l) => {
+    const lines = l.text.split("\n");
+    const w = Math.max(...lines.map((t) => t.length * l.size * (0.6 + (l.letterSpacing ?? 0))));
+    return { x: l.x - w / 2, y: l.y - l.size * 0.85, w, h: lines.length * l.size * 1.12 };
+  });
+
   // Atlas reference labels: countries, cities, seas, lakes, peaks, regions.
   const pointLabelBoxes: Rect[] = labels.map((l) => {
     const w = textW(l.text, 8.5 * k);
@@ -661,7 +726,7 @@ function buildMap(
           countries: drawn,
           focus: focusFeature,
           layers: atlas,
-          obstacles: [legendRect, northRect, scaleRect, ...pointLabelBoxes].filter((r): r is Rect => r !== null),
+          obstacles: [legendRect, northRect, scaleRect, ...pointLabelBoxes, ...unitLabelBoxes].filter((r): r is Rect => r !== null),
           circles: symbols.map((sy) => ({ cx: sy.cx, cy: sy.cy, r: sy.r + 1.5 * k })),
           quiet: isSymbolMap,
           countryLabels: !(isChoropleth && regionUnits.length),
@@ -686,7 +751,7 @@ function buildMap(
     coastPath,
     rivers,
     lakesPath,
-    atlasLabels,
+    atlasLabels: [...unitLabels, ...atlasLabels],
     units,
     regions,
     provinceLines,
@@ -805,7 +870,61 @@ const LABEL_STYLE: Record<MapLabel["role"], { fill: string; serif: boolean; ital
   lake: { fill: "#2f6a9e", serif: true, italic: true },
   peak: { fill: "#4b3527", serif: false },
   region: { fill: "#7a5a3a", serif: true, italic: true },
+  unit: { fill: "#4e3b2c", serif: true, weight: 600 },
 };
+
+/** Political-atlas tints for reference plates: sand, sage, rose, lavender, butter. */
+const REF_PASTELS = ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"];
+
+/** "Copperbelt Province" → "Copperbelt": the plate's title already says what the units are. */
+function unitName(name: string | undefined): string {
+  return String(name ?? "")
+    .replace(/\s+(province|region|district|state|county|governorate|prefecture|department|oblast|municipality)$/i, "")
+    .trim();
+}
+
+function splitTwo(text: string): string[] {
+  const words = text.split(" ");
+  let best = [text];
+  let bestW = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ");
+    const b = words.slice(i).join(" ");
+    const w = Math.max(a.length, b.length);
+    if (w < bestW) {
+      bestW = w;
+      best = [a, b];
+    }
+  }
+  return best;
+}
+
+/** A point inside the unit for its label: the centroid if it falls inside, else the middle of its widest row. */
+function interiorPoint(ft: CountryFeature, main: Feature): [number, number] | null {
+  const c = geoCentroid(main as never) as [number, number];
+  if (geoContains(ft as never, c)) return c;
+  const g = main.geometry;
+  const ring = g.type === "Polygon" ? g.coordinates[0] : g.type === "MultiPolygon" ? g.coordinates[0][0] : null;
+  if (!ring) return null;
+  const lats = ring.map((p) => p[1]);
+  const lat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const xs: number[] = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    if ((y1 - lat) * (y2 - lat) < 0) xs.push(x1 + ((lat - y1) * (x2 - x1)) / (y2 - y1));
+  }
+  xs.sort((a, b) => a - b);
+  let best: [number, number] | null = null;
+  let span = 0;
+  for (let i = 0; i + 1 < xs.length; i += 2) {
+    if (xs[i + 1] - xs[i] > span) {
+      span = xs[i + 1] - xs[i];
+      best = [(xs[i] + xs[i + 1]) / 2, lat];
+    }
+  }
+  return best;
+}
 
 function useAtlasLayers(enabled: boolean, provided: AtlasLayers | null | undefined) {
   const [layers, setLayers] = useState<AtlasLayers | null>(null);

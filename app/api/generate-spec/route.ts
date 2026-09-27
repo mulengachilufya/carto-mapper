@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { generateMapSpecHeuristic, applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
+import { applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
+import { plan, finalize } from "@/lib/engine";
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
-import { parseMapSpec, MAP_TYPES, GEO_LEVELS, type MapSpec } from "@/lib/mapspec/schema";
+import { parseMapSpec, MAP_TYPES, GEO_LEVELS, type Decision, type MapSpec } from "@/lib/mapspec/schema";
 import { accountsEnabled, getCurrentUser, getServiceSupabase } from "@/lib/supabase/server";
 import { getOwnJob, type JobRow } from "@/lib/jobs";
 import { CHANGES_PER_MAP, DAILY_MAP_LIMIT, getUsage, type Usage } from "@/lib/quota";
@@ -58,59 +59,47 @@ export async function POST(req: Request) {
       }
     : undefined;
 
+  // The engine: read the brief, design by the rulebook, let the AI refine, check everything.
+  const userTitle = body.title ? String(body.title).trim() || undefined : undefined;
+  const facts = { table: input.table, roles: input.roles, resolved: input.geography, userTitle };
+  const run = plan({ ...facts, prompt: input.vibe ?? "" });
+  const lockedType =
+    !revision && body.mapTypeLocked && typeof body.mapType === "string" && (MAP_TYPES as readonly string[]).includes(body.mapType)
+      ? (body.mapType as MapSpec["mapType"])
+      : undefined;
+  const baseline = lockedType ? parseMapSpec({ ...run.plan.spec, mapType: lockedType }) : run.plan.spec;
+
   let spec: MapSpec;
   let engine: "claude" | "rules" = "rules";
   let rationale: unknown = null;
+  let aiDecisions: Decision[] | undefined;
   try {
     if (hasAnthropic()) {
-      const design = await generateMapSpecWithClaude(input, revision);
-      spec = design.spec;
-      rationale = design.rationale;
+      const d = await generateMapSpecWithClaude(input, revision, { brief: run.brief, spec: baseline });
+      spec = d.spec;
+      rationale = d.rationale;
+      aiDecisions = d.decisions;
       engine = "claude";
     } else if (revision?.revisionRequest && revision.previousSpec) {
       spec = applyRevisionHeuristic(revision.previousSpec, revision.revisionRequest);
     } else {
-      spec = generateMapSpecHeuristic(input);
+      spec = baseline;
     }
   } catch (err) {
-    console.error("generate-spec falling back to rules engine:", err);
-    spec =
-      revision?.revisionRequest && revision.previousSpec
-        ? applyRevisionHeuristic(revision.previousSpec, revision.revisionRequest)
-        : generateMapSpecHeuristic(input);
+    console.error("generate-spec: AI designer unavailable, using the rulebook:", err);
+    spec = revision?.revisionRequest && revision.previousSpec ? applyRevisionHeuristic(revision.previousSpec, revision.revisionRequest) : baseline;
     engine = "rules";
   }
 
-  // User choices (map type, title, branding) override the engine's guesses.
-  const overrides: Record<string, unknown> = {};
-  if (body.branding && typeof body.branding === "object") overrides.branding = body.branding;
-  if (!revision) {
-    if (typeof body.mapType === "string" && (MAP_TYPES as readonly string[]).includes(body.mapType)) {
-      overrides.mapType = body.mapType;
-    }
-    if (body.title) overrides.title = String(body.title);
-    // Where the data itself says the map is (resolved from the user's places) beats a guess.
-    const g = body.geography as { level?: string; region?: string } | undefined;
-    if (g && (GEO_LEVELS as readonly string[]).includes(String(g.level))) {
-      overrides.geography = { ...spec.geography, level: g.level, region: g.region ?? spec.geography.region };
-      // Furniture conventions follow the (now known) scale: no scale bar on a world map,
-      // no graticule on a country map.
-      // The AI designer already chose furniture knowing the geography; the rules engine didn't.
-      if (engine === "rules") {
-        const small = g.level === "world" || g.level === "continent";
-        overrides.furniture = { ...spec.furniture, scalebar: !small, north_arrow: g.level !== "world", graticule: small };
-      }
-    }
-  }
-  if (Object.keys(overrides).length) spec = parseMapSpec({ ...spec, ...overrides });
+  // Branding and the user's own furniture toggles always win.
+  if (body.branding && typeof body.branding === "object") spec = parseMapSpec({ ...spec, branding: body.branding });
+  if (body.outputOptions) spec = parseMapSpec({ ...spec, furniture: { ...spec.furniture, ...(body.outputOptions as object) } });
+  if (lockedType) spec = parseMapSpec({ ...spec, mapType: lockedType });
 
-  // User furniture toggles always win over the engine's choices.
-  if (body.outputOptions) {
-    spec = parseMapSpec({
-      ...spec,
-      furniture: { ...spec.furniture, ...(body.outputOptions as object) },
-    });
-  }
+  // Every spec — rulebook's, AI's or revised — passes the engine's checks.
+  spec = finalize(spec, run, facts, { aiDecisions, revision: revision?.revisionRequest });
+  // Rows implied by the brief itself ("where we work: Kenya, Uganda, Tanzania").
+  const rows = !input.table?.rows.length && !revision ? run.plan.rows ?? null : null;
 
   // Save the map to the user's account. A change to a map they own updates it; anything
   // else is a new map, which counts toward today's limit.
@@ -135,7 +124,9 @@ export async function POST(req: Request) {
             answers: input.answers ?? {},
             uploaded_data: input.table
               ? { columns: input.table.columns, rows: input.table.rows.slice(0, 5000), roles: input.roles }
-              : null,
+              : rows
+                ? { columns: ["Country"], rows }
+                : null,
             map_spec: spec,
             status: "preview",
             output_options: spec.furniture,
@@ -157,7 +148,7 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ spec, jobId, engine, rationale, usage });
+  return NextResponse.json({ spec, jobId, engine, rationale, usage, rows });
 }
 
 /** This map's position among the user's maps of the last 24 hours (0 = oldest). */

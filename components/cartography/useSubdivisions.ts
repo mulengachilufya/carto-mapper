@@ -21,7 +21,7 @@ export function useSubdivisions(
   const region = spec?.geography.region ?? "";
   const country = spec && geo && region && SUB_NATIONAL.has(spec.geography.level) ? findCountry(geo, region) : undefined;
   const name = country?.properties.name;
-  const wantDistricts = Boolean(spec && REGION_TYPES.has(spec.mapType));
+  const wantDistricts = Boolean(spec && (REGION_TYPES.has(spec.mapType) || (spec.mapType === "reference" && spec.geography.level === "admin2")));
   const [subs, setSubs] = useState<{ key: string; value: Subdivisions } | null>(null);
   const key = `${name}|${wantDistricts}`;
 

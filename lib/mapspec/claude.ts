@@ -12,8 +12,10 @@ import {
   ORIENTATIONS,
 } from "./schema";
 import { PALETTES_BY_KIND } from "@/lib/cartography/palettes";
-import { generateMapSpecHeuristic, type GenerateInput } from "./generate";
+import type { GenerateInput } from "./generate";
 import { profileTable } from "./profile";
+import type { Decision as LogEntry } from "./schema";
+import type { Brief } from "@/lib/engine/brief";
 
 const MODEL = "claude-opus-5";
 // If Claude Opus 5's safety classifiers decline a brief, the API re-runs it on this
@@ -75,9 +77,17 @@ type DecisionT = z.infer<typeof Decision>;
 export interface ClaudeDesign {
   spec: MapSpec;
   rationale: DecisionT["rationale"];
+  /** The rationale as decision-log entries. */
+  decisions: LogEntry[];
 }
 
-export async function generateMapSpecWithClaude(input: GenerateInput, revision?: RevisionContext): Promise<ClaudeDesign> {
+/** The engine's reading of the brief and its rulebook design — what the AI refines. */
+export interface Baseline {
+  brief: Brief;
+  spec: MapSpec;
+}
+
+export async function generateMapSpecWithClaude(input: GenerateInput, revision: RevisionContext | undefined, baseline: Baseline): Promise<ClaudeDesign> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: TIMEOUT_MS, maxRetries: 0 });
 
   const response = await client.beta.messages.parse({
@@ -88,7 +98,7 @@ export async function generateMapSpecWithClaude(input: GenerateInput, revision?:
     thinking: { type: "adaptive" },
     output_config: { effort: "medium", format: betaZodOutputFormat(Decision) },
     system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: buildBrief(input, revision) }],
+    messages: [{ role: "user", content: buildBrief(input, revision, baseline) }],
   });
 
   // A refusal from the whole fallback chain, or an unparseable answer, goes to the
@@ -97,7 +107,15 @@ export async function generateMapSpecWithClaude(input: GenerateInput, revision?:
   const d = response.parsed_output;
   if (!d) throw new Error(`no structured design returned (stop_reason: ${response.stop_reason})`);
 
-  return { spec: applyDecision(input, revision, d), rationale: d.rationale };
+  const r = d.rationale;
+  const decisions: LogEntry[] = [
+    { rule: "AI", topic: "Story", choice: d.title, because: r.story, by: "ai" as const },
+    { rule: "AI", topic: "Map type", choice: d.mapType, because: r.mapType, by: "ai" as const },
+    { rule: "AI", topic: "Classes", choice: `${d.classes} ${d.classification.replace("_", " ")}`, because: r.classification, by: "ai" as const },
+    { rule: "AI", topic: "Colour", choice: d.palette, because: r.colour, by: "ai" as const },
+    { rule: "AI", topic: "Style", choice: d.style, because: r.style, by: "ai" as const },
+  ].filter((x) => x.because.trim());
+  return { spec: applyDecision(revision?.previousSpec ?? baseline.spec, d), rationale: r, decisions };
 }
 
 /**
@@ -105,9 +123,8 @@ export async function generateMapSpecWithClaude(input: GenerateInput, revision?:
  * revising, else the rules engine's), field by field — one odd value can't reset
  * the whole map to defaults.
  */
-function applyDecision(input: GenerateInput, revision: RevisionContext | undefined, d: DecisionT): MapSpec {
-  const base = revision?.previousSpec ?? generateMapSpecHeuristic(input);
-  const classes = Math.min(7, Math.max(3, Math.round(d.classes)));
+function applyDecision(base: MapSpec, d: DecisionT): MapSpec {
+  const classes = Math.min(7, Math.max(2, Math.round(d.classes)));
   const next = {
     ...base,
     title: d.title.trim() || base.title,
@@ -142,7 +159,7 @@ function applyDecision(input: GenerateInput, revision: RevisionContext | undefin
 const SYSTEM_PROMPT = `You are CartoMapper's senior cartographer. A customer — an NGO officer, a planner, a researcher, a teacher — describes a map and gives you data. You design the map the way a professional human cartographer would for a printed atlas or report, and a renderer draws exactly what you specify.
 
 What the renderer can draw (so design for it):
-- Map types: choropleth (shade regions by value), footprint (highlight regions, no values), proportional_symbol (circles sized by value, area-true), graduated_symbol, dot (one dot per record), point (labelled sites), categorical_point (sites coloured by category).
+- Map types: reference (an atlas plate with no data: every province/district/country tinted apart from its neighbours and named — for "Provinces of Zambia", "map of Kenya", "political map of Africa"), choropleth (shade regions by value), footprint (highlight regions, no values), proportional_symbol (circles sized by value, area-true), graduated_symbol, dot (one dot per record), point (labelled sites), categorical_point (sites coloured by category).
 - Geography: every country; provinces/states/counties (admin1) and districts (admin2) for ~200 countries; points anywhere. Levels: world, continent (with region names like "East Africa", "Southern Africa", "Europe", "South America", "Middle East"), country, admin1, admin2, city.
 - Styles:
   • atlas — a physical school-atlas page: hypsometric relief and hillshade, sea depths, rivers, lakes, peaks, serif place names. Data colours keep a terrain texture. Best for locator maps, sites, physical context, general audiences, anything where "where" matters.
@@ -162,9 +179,23 @@ How to decide:
 - Honour the customer's explicit wishes (colours, style, emphasis) unless they break cartographic honesty — then do the honest thing and explain why in the rationale.
 - When revising, change only what the request asks; keep every other decision.`;
 
-function buildBrief(input: GenerateInput, revision?: RevisionContext): string {
+function buildBrief(input: GenerateInput, revision: RevisionContext | undefined, baseline: Baseline): string {
   const parts: string[] = [];
   if (input.vibe) parts.push(`Customer's description:\n"""${input.vibe}"""`);
+  const b = baseline.brief;
+  parts.push(
+    `The engine's reading of the description (deterministic; treat place and units as the customer's words):\n${JSON.stringify({
+      place: b.place,
+      countries: b.countries,
+      units: b.units,
+      subject: b.theme?.label ?? null,
+      intent: b.intent,
+      style: b.style,
+      colour: b.palette,
+      year: b.year,
+    })}`,
+    `The rulebook's baseline design (improve it where cartographic judgement says so; keep its geography unless the data says otherwise — a checker enforces geography, type/data fit, class counts, honest colour and scale conventions after you):\n${JSON.stringify(summarise(baseline.spec))}`,
+  );
 
   if (input.geography) {
     parts.push(

@@ -10,7 +10,7 @@ export interface MapLabel {
   y: number;
   text: string;
   size: number;
-  role: "country" | "focus-city" | "city" | "ocean" | "sea" | "lake" | "peak" | "region";
+  role: "country" | "focus-city" | "city" | "ocean" | "sea" | "lake" | "peak" | "region" | "unit";
   anchor: "start" | "middle" | "end";
   letterSpacing?: number; // em
   marker?: { x: number; y: number; kind: "capital" | "provincial" | "town" | "peak" };
@@ -52,6 +52,32 @@ export function placeAtlasLabels(o: LabelOptions): MapLabel[] {
     // Reject points on the far side of the globe / outside clipped projections.
     if (!back || Math.abs(back[0] - lon) > 0.5 || Math.abs(back[1] - lat) > 0.5) return null;
     return p;
+  };
+  /** The middle of a country's largest visible stretch inside the frame (grid search). */
+  const visiblePoint = (c: CountryFeature): [number, number] | null => {
+    const [[bx0, by0], [bx1, by1]] = path.bounds(c as unknown as GeoPermissibleObjects);
+    const x0 = Math.max(bx0, inner.x), x1 = Math.min(bx1, inner.x + inner.w);
+    const y0 = Math.max(by0, inner.y), y1 = Math.min(by1, inner.y + inner.h);
+    if (x1 - x0 < 40 * k || y1 - y0 < 14 * k) return null;
+    const n = 14;
+    let best: [number, number] | null = null;
+    let bestScore = -Infinity;
+    for (let i = 1; i < n; i++) {
+      for (let j = 1; j < n; j++) {
+        const x = x0 + ((x1 - x0) * i) / n;
+        const y = y0 + ((y1 - y0) * j) / n;
+        const ll = projection.invert?.([x, y]);
+        if (!ll || !geoContains(c as unknown as GeoPermissibleObjects, ll as [number, number])) continue;
+        if (o.focus && geoContains(o.focus as unknown as GeoPermissibleObjects, ll as [number, number])) continue;
+        // Prefer points far from the frame edge, so the label sits well inside the page.
+        const score = Math.min(x - inner.x, inner.x + inner.w - x, (y - inner.y) * 2, (inner.y + inner.h - y) * 2);
+        if (score > bestScore) {
+          bestScore = score;
+          best = [x, y];
+        }
+      }
+    }
+    return best;
   };
   const tryPlace = (label: MapLabel, box: Rect, avoidCircles = true) => {
     if (!inside(box) || placed.some((p) => hit(p, box)) || (avoidCircles && circles.some((c) => hit(c, box)))) return false;
@@ -97,6 +123,9 @@ export function placeAtlasLabels(o: LabelOptions): MapLabel[] {
       let p = project(lon, lat);
       // Crescent-shaped countries: fall back to the middle of the visible bounds.
       if (p && !geoContains(main, projection.invert!(p)!)) p = null;
+      // On a country plate a neighbour's centre is usually off the page: name the part
+      // that is visible instead, as atlases do.
+      if (!p || !inside({ x: p[0] - 1, y: p[1] - 1, w: 2, h: 2 })) p = visiblePoint(c);
       if (!p) continue;
       const size = Math.max(6.5 * k, Math.min((local ? 10 : 12) * k, Math.sqrt(w * h) / 9));
       const text = c.properties.name.toUpperCase();

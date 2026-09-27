@@ -38,7 +38,7 @@ export function BrandStep({ title, organisation, logoDataUrl, notes, onChange, o
           <input
             value={title}
             onChange={(e) => onChange({ title: e.target.value })}
-            placeholder="e.g. Beneficiaries by District, 2026"
+            placeholder="Leave blank — the engine titles it the way an atlas would"
             className={INPUT}
           />
         </Field>

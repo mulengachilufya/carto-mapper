@@ -11,6 +11,8 @@ import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
 import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
 import { resolvePlaces, type Resolution } from "@/lib/data/resolve";
 import type { Usage } from "@/lib/quota";
+import { readBrief } from "@/lib/engine/brief";
+import { illustrativeData } from "@/lib/data/illustrative";
 
 interface Brand {
   title: string;
@@ -33,41 +35,13 @@ function recommendType(roles: ColumnRoles | null, prompt: string, resolution: Re
   }
   if (roles?.nameField && roles?.valueField) return "choropleth";
   if (roles?.nameField) return "footprint";
+  // No data: follow the engine's reading of the sentence.
+  const b = readBrief(prompt);
+  if (b.intent === "footprint") return "footprint";
+  if (b.intent === "locations") return "point";
+  if (b.intent === "thematic") return b.place?.kind === "country" && !b.units ? "proportional_symbol" : "choropleth";
   if (/where we work|footprint|presence|reach|member states|countries we/.test(p)) return "footprint";
-  if (/site|location|clinic|office|borehole|facility|where are/.test(p)) return "point";
-  return "choropleth";
-}
-
-const titleCase = (s: string) =>
-  s
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\w\S*/g, (w, i: number) => (i > 0 && /^(of|and|by|in|the|per|for|a|an)$/i.test(w) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1)));
-
-/**
- * A map title the way an atlas would print it. With data: "Schools by County, Kenya"
- * from the value and place columns. Otherwise the prompt, trimmed of the audience
- * ("…, for a donor report") and politely capitalised.
- */
-function titleFromData(prompt: string, roles: ColumnRoles | null, resolution: Resolution | null): string {
-  const region = resolution?.region && resolution.region !== "World" ? resolution.region.replace("United States of America", "United States") : undefined;
-  const generic = /^(value|values|count|total|number|column \d+|place|name)$/i;
-  if (roles?.valueField && roles.nameField && !generic.test(roles.valueField)) {
-    const unit = generic.test(roles.nameField)
-      ? { countries: "Country", provinces: "Province", districts: "District", towns: "Site", coordinates: "Site" }[resolution?.reading.kind ?? "towns"]
-      : roles.nameField.replace(/s$/i, "");
-    return `${titleCase(roles.valueField)} by ${titleCase(unit)}${region && resolution?.level !== "world" ? `, ${region}` : ""}`;
-  }
-  const s = prompt
-    .trim()
-    .replace(/\s+/g, " ")
-    .split(/[.!?\n]/)[0]
-    // Drop the audience: "…, annual report 2026", "… for a donor briefing", "… for our board deck".
-    .replace(/,?\s+(?:for\s+)?(?:(?:a|an|the|our|my)\s+)?(?:annual|donor|board|quarterly|ministry|internal|client|funding)?\s*(?:report|briefing|deck|presentation|slides?|article|paper|thesis|newsletter|proposal)\b.*$/i, "")
-    .replace(/,?\s+(for|in order to|to be used in|to use in)\s+(a|an|the|our|my)\b.*$/i, "");
-  if (!s) return region ? `Map of ${region}` : "Untitled Map";
-  return titleCase(s.split(" ").slice(0, 10).join(" "));
+  return "reference";
 }
 
 export function CreateWizard() {
@@ -78,6 +52,10 @@ export function CreateWizard() {
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [roles, setRoles] = useState<ColumnRoles | null>(null);
   const [mapType, setMapType] = useState<string | null>(null);
+  // Only a type the user actually picked binds the engine; the recommendation doesn't.
+  const [typeLocked, setTypeLocked] = useState(false);
+  // Sample values the engine asked for when the brief described data it didn't include.
+  const [sample, setSample] = useState<{ table: ParsedTable; roles: ColumnRoles } | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
   const [files, setFiles] = useState<ContextFile[]>([]);
   // Where the data says the map is (e.g. "the counties of Kenya"), found by the resolver.
@@ -106,6 +84,7 @@ export function CreateWizard() {
   const atLimit = Boolean(usage && usage.remaining <= 0 && !jobId);
 
   const recommended = recommendType(roles, prompt, resolution);
+  const rows = table?.rows ?? sample?.table.rows ?? [];
   const geography: { level: GeoLevel; region?: string } | undefined = resolution
     ? { level: resolution.level, region: resolution.region }
     : undefined;
@@ -123,6 +102,7 @@ export function CreateWizard() {
           table,
           roles,
           mapType,
+          mapTypeLocked: typeLocked,
           geography,
           title: brand.title || undefined,
           branding: {
@@ -147,7 +127,22 @@ export function CreateWizard() {
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSpec(json.spec as MapSpec);
+      let next = json.spec as MapSpec;
+      if (!opts?.previousSpec) {
+        // Data the brief itself implied (a list of countries), or illustrative values.
+        let s2: { table: ParsedTable; roles: ColumnRoles } | null = null;
+        if (!table && Array.isArray(json.rows) && json.rows.length) {
+          s2 = { table: { columns: Object.keys(json.rows[0]), rows: json.rows, rowCount: json.rows.length }, roles: { nameField: next.data.nameField } };
+        } else if (!table && next.data.illustrative && geo) {
+          const ill = await illustrativeData(next, geo).catch(() => null);
+          if (ill) {
+            s2 = { table: ill.table, roles: ill.roles };
+            next = ill.spec;
+          }
+        }
+        setSample(s2);
+      }
+      setSpec(next);
       setJobId(json.jobId ?? jobId ?? null);
       if (opts?.revisionRequest) setRevisionsUsed((n) => n + 1);
       setStep(3);
@@ -163,7 +158,7 @@ export function CreateWizard() {
     try {
       sessionStorage.setItem(
         "cartomapper:lastMap",
-        JSON.stringify({ spec, data: table?.rows ?? [], title: spec.title, jobId }),
+        JSON.stringify({ spec, data: rows, title: spec.title, jobId }),
       );
     } catch {
       /* ignore */
@@ -206,7 +201,6 @@ export function CreateWizard() {
             setRoles(res2?.roles ?? (ex.roles as ColumnRoles));
             setResolution(res2);
           }
-          if (ex.title) setBrand((b) => (b.title ? b : { ...b, title: String(ex.title) }));
           if (ex.mapType) setMapType((t) => t ?? String(ex.mapType));
         }
       } catch {
@@ -215,7 +209,6 @@ export function CreateWizard() {
         setExtracting(false);
       }
     }
-    setBrand((b) => (b.title ? b : { ...b, title: titleFromData(prompt, roles, resolution) }));
     setMapType((t) => t ?? recommended);
     setStep(1);
   }
@@ -274,7 +267,10 @@ export function CreateWizard() {
             geo={geo}
             selected={mapType}
             recommended={recommended}
-            onSelect={setMapType}
+            onSelect={(t) => {
+              setMapType(t);
+              setTypeLocked(t !== recommended);
+            }}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />
@@ -297,7 +293,7 @@ export function CreateWizard() {
           <PreviewStep
             geo={geo}
             spec={spec}
-            data={table?.rows ?? []}
+            data={rows}
             setSpec={setSpec}
             onRevise={(text) => generate({ previousSpec: spec, revisionRequest: text })}
             onBack={() => setStep(2)}

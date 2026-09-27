@@ -15,6 +15,7 @@ export const MAP_TYPES = [
   "dot", // one dot per record (density)
   "point", // simple located points
   "categorical_point", // points coloured by category
+  "reference", // an atlas plate: the units themselves, tinted and named (e.g. "Provinces of Zambia")
 ] as const;
 
 export const GEO_LEVELS = [
@@ -51,6 +52,15 @@ export const FurnitureSchema = z.object({
 });
 export type Furniture = z.infer<typeof FurnitureSchema>;
 
+export const DecisionSchema = z.object({
+  rule: z.string(), // e.g. "G1", "Q3"
+  topic: z.string(), // "Geography", "Map type", "Classes", …
+  choice: z.string(),
+  because: z.string(),
+  by: z.enum(["brief", "data", "rules", "ai", "check"]),
+});
+export type Decision = z.infer<typeof DecisionSchema>;
+
 export const MapSpecSchema = z.object({
   version: z.literal(1).default(1),
 
@@ -83,6 +93,7 @@ export const MapSpecSchema = z.object({
       lonField: z.string().optional(),
       valueLabel: z.string().optional(), // legend title, e.g. "Patients / year"
       valueFormat: z.string().optional(), // d3-format string, e.g. ",", ".0%", "$,"
+      illustrative: z.boolean().optional(), // no data given: the browser draws labelled sample values
     })
     .default({}),
 
@@ -90,7 +101,7 @@ export const MapSpecSchema = z.object({
     .object({
       palette: z.string().default("Blues"), // ColorBrewer scheme name
       paletteKind: z.enum(PALETTE_KINDS).default("sequential"),
-      classes: z.number().int().min(3).max(9).default(5),
+      classes: z.number().int().min(2).max(9).default(5),
       classification: z.enum(CLASSIFICATIONS).default("quantile"),
       reverse: z.boolean().default(false),
       minRadius: z.number().default(2),
@@ -134,6 +145,9 @@ export const MapSpecSchema = z.object({
     .default({}),
 
   notes: z.string().optional(), // human-readable rationale
+
+  /** The engine's decision log: every rule applied and every correction the checks made. */
+  decisions: z.array(DecisionSchema).optional(),
 });
 
 export type MapSpec = z.infer<typeof MapSpecSchema>;
@@ -145,8 +159,26 @@ export type Classification = (typeof CLASSIFICATIONS)[number];
 
 /** Parse loosely — never throws; fills defaults for anything malformed. */
 export function parseMapSpec(input: unknown): MapSpec {
-  const result = MapSpecSchema.safeParse(input ?? {});
-  if (result.success) return result.data;
-  // Last-resort: take whatever parsed and let defaults fill the rest.
+  // Salvage field by field: drop only the values that fail validation and let their
+  // defaults fill in, so one bad field (say, 11 classes) never resets a whole map.
+  const candidate: unknown = input && typeof input === "object" ? structuredClone(input) : {};
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const result = MapSpecSchema.safeParse(candidate);
+    if (result.success) return result.data;
+    for (const issue of result.error.issues) dropPath(candidate, issue.path as (string | number)[]);
+  }
   return MapSpecSchema.parse({});
+}
+
+function dropPath(obj: unknown, path: (string | number)[]) {
+  if (!path.length || !obj || typeof obj !== "object") return;
+  let cur = obj as Record<string | number, unknown>;
+  for (let i = 0; i < path.length - 1; i++) {
+    const next = cur[path[i]];
+    if (!next || typeof next !== "object") return;
+    cur = next as Record<string | number, unknown>;
+  }
+  const last = path[path.length - 1];
+  if (Array.isArray(cur) && typeof last === "number") cur.splice(last, 1);
+  else delete cur[last];
 }
