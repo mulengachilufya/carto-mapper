@@ -37,19 +37,22 @@ saving, no daily limit, and the map designer uses the built-in rules engine unle
    the sign-up form by a trigger) and `map_jobs` (each saved map, owned by a user), with
    row-level security on and no public policies — only the server touches them. Safe to
    re-run; it also upgrades a database from the old paid version.
-3. **Authentication → Sign In / Providers → Email**: enabled, and **Confirm email off**.
-   People are signed in the moment they register and go straight to the map maker.
+3. **Authentication → Sign In / Providers → Email**: enabled. The *Confirm email* setting
+   doesn't matter: CartoMapper creates accounts itself, already confirmed, so people are
+   signed in the moment they register and Supabase never emails them.
 4. **Authentication → URL Configuration**:
    - *Site URL*: `https://cartomapper.online`
    - *Redirect URLs*: add `https://cartomapper.online/auth/callback`
      (and `http://localhost:3000/auth/callback` for local testing). Deploy previews:
      `https://*--cartomapper.netlify.app/auth/callback`.
-5. Supabase's built-in mailer then only sends password-reset emails; its few-per-hour
-   limit is fine for that. No custom SMTP needed.
+5. No custom SMTP needed: sign-up sends nothing from Supabase, and password recovery is a
+   6-digit code emailed by CartoMapper through Resend (below). Only if Resend isn't set up
+   does the site fall back to Supabase's own reset-link email.
 6. **Project Settings → API**: copy the URL, the `anon` key and the `service_role` key
    into the environment variables below.
 
-**Welcome email** (`lib/email.ts`): every new account gets one welcome email, sent by
+**Emails from CartoMapper** (`lib/email.ts`): the welcome email and the password-reset
+code. Every new account gets one welcome email, sent by
 the site through [Resend](https://resend.com) (the same service Lenga Maps uses). In
 Resend: **Domains → Add domain** → `cartomapper.online`, add the DNS records it shows,
 then **API Keys → Create** and set `RESEND_API_KEY` in Netlify. The sender defaults to

@@ -26,7 +26,7 @@ export async function sendEmail(msg: EmailMessage): Promise<boolean> {
     return false;
   }
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch(process.env.RESEND_API_URL || "https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: FROM, to: [msg.to], subject: msg.subject, html: msg.html, text: msg.text }),
@@ -86,6 +86,41 @@ The CartoMapper team`;
 </td></tr></table></body></html>`;
 
   return { to, subject: `Welcome to CartoMapper, ${name}`, html, text };
+}
+
+/** A short email carrying a password-recovery code. */
+export function resetCodeEmail(to: string, code: string, firstName?: string | null): EmailMessage {
+  const name = firstName?.trim() || "there";
+  const text = `Hi ${name},
+
+Your CartoMapper code to reset your password is: ${code}
+
+Enter it on the reset page, along with your new password. The code works once and expires in an hour.
+
+If you didn't ask for this, you can ignore this email; your password stays the same.
+
+The CartoMapper team`;
+  const html = `<!doctype html><html><body style="margin:0;background:#f6f0e2;font-family:Georgia,'Times New Roman',serif;">
+<div style="display:none;max-height:0;overflow:hidden;">Your code: ${code}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f0e2;padding:32px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fbf8f0;border:1px solid #d9ceb6;">
+  <tr><td style="background:#0e2620;padding:14px 20px;">
+    <img src="${APP_URL}/brand/cartomapper-logo-reversed.png" alt="CartoMapper" width="200" style="display:block;border:0;max-width:200px;height:auto;">
+  </td></tr>
+  <tr><td style="padding:32px;">
+    <h1 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#1c1a17;font-weight:600;">Reset your password</h1>
+    <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4a443b;">
+      Hi ${esc(name)}, here is your code. Enter it on the reset page with your new password.
+    </p>
+    <p style="margin:0 0 20px;font-family:'Courier New',monospace;font-size:34px;letter-spacing:10px;font-weight:bold;color:#1f5c4d;">${esc(code)}</p>
+    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#7a7266;">
+      The code works once and expires in an hour. If you didn't ask for this, ignore this email; your password stays the same.
+    </p>
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
+  return { to, subject: `Your CartoMapper code: ${code}`, html, text };
 }
 
 /**
