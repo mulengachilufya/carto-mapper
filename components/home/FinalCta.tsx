@@ -9,9 +9,9 @@ export function FinalCta() {
       <div className="relative mx-auto max-w-3xl px-5">
         <p className="eyebrow text-atlas-ochre">Your turn</p>
         <h2 className="display mt-4 text-5xl font-semibold leading-[1.02] sm:text-7xl">
-          Put your world <em className="font-normal text-atlas-sage">on the map.</em>
+          Your map is <em className="font-normal text-atlas-sage">three minutes away.</em>
         </h2>
-        <p className="mx-auto mt-6 max-w-xl text-lg text-atlas-paper/75">Three minutes from now you could be holding it.</p>
+        <p className="mx-auto mt-6 max-w-xl text-lg text-atlas-paper/75">Free for everyone. Up to 10 maps a day.</p>
         <Link
           href="/create"
           className="mt-10 inline-flex h-14 items-center rounded-full bg-atlas-leather px-10 text-lg font-semibold text-atlas-paper transition-colors hover:bg-atlas-leather-2"

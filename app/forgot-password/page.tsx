@@ -8,7 +8,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell
       title="Reset your password"
-      sub="Enter your account's email and we'll send you a link to choose a new one."
+      sub="Enter your account's email and we'll send you a 6-digit code to choose a new password."
       footer={
         <Link href="/login" className="font-medium text-atlas-moss hover:underline">
           ← Back to sign in
