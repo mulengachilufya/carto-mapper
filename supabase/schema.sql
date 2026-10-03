@@ -1,66 +1,93 @@
 -- ============================================================
 --  CartoMapper — Supabase schema
---  Run this in the Supabase SQL editor of your NEW CartoMapper
---  project (NOT the Lenga Maps one).
+--  Run this in the SQL editor of your CartoMapper Supabase
+--  project (NOT the Lenga Maps one). Safe to run again.
 -- ============================================================
 
--- gen_random_uuid() is available in Supabase by default (pgcrypto).
+-- ─── Profiles (one per account) ──────────────────────────────
+-- Filled from what people enter at sign-up (auth user_metadata)
+-- by the trigger below, so no API call is needed after sign-up.
+create table if not exists profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  email text,
+  first_name text,
+  last_name text,
+  country text,
+  role text, -- lib/profile-options.ts ROLES: ngo | government | research | teacher | student | business | media | gis | other
+  welcome_email_sent_at timestamptz -- set once the welcome email has gone out (lib/email.ts)
+);
+alter table profiles add column if not exists welcome_email_sent_at timestamptz;
 
--- ─── Map jobs ────────────────────────────────────────────────
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, first_name, last_name, country, role)
+  values (
+    new.id,
+    new.email,
+    left(nullif(trim(new.raw_user_meta_data ->> 'first_name'), ''), 120),
+    left(nullif(trim(new.raw_user_meta_data ->> 'last_name'), ''), 120),
+    left(nullif(trim(new.raw_user_meta_data ->> 'country'), ''), 120),
+    left(nullif(trim(new.raw_user_meta_data ->> 'role'), ''), 40)
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- Only the trigger runs it; nobody can call it through the API.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ─── Maps ────────────────────────────────────────────────────
 create table if not exists map_jobs (
   id uuid primary key default gen_random_uuid(),
-  created_at timestamptz default now(),
-  session_id text not null,
+  created_at timestamptz not null default now(),
+  user_id uuid references auth.users (id) on delete cascade,
   industry text not null,
   custom_industry text,
   vibe_prompt text,
   answers jsonb not null default '{}',
   uploaded_data jsonb,
   map_spec jsonb,
-  svg_output text,
-  pdf_url text,
-  status text default 'draft', -- draft | generating | preview | paid | complete | failed
-  stripe_payment_intent_id text,
-  stripe_checkout_session_id text,
-  revision_count integer default 0,
-  revision_of uuid references map_jobs(id),
-  output_options jsonb default '{"title": true, "legend": true, "scalebar": true, "north_arrow": true, "caption": false, "source": true}'
+  status text default 'preview',
+  revision_count integer not null default 0, -- changes made to this map (lib/quota-rules.ts CHANGES_PER_MAP)
+  delivered_at timestamptz,                  -- last download
+  deleted_at timestamptz,                    -- removed from "My maps"; still counts toward the daily limit
+  output_options jsonb
 );
 
-create index if not exists map_jobs_session_idx on map_jobs (session_id);
-create index if not exists map_jobs_status_idx on map_jobs (status);
-create index if not exists map_jobs_checkout_idx on map_jobs (stripe_checkout_session_id);
+-- Upgrading from the paid version (map_jobs keyed by browser session): run once.
+alter table map_jobs add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table map_jobs add column if not exists deleted_at timestamptz;
+alter table map_jobs add column if not exists delivered_at timestamptz;
+alter table map_jobs add column if not exists revision_count integer not null default 0;
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'map_jobs' and column_name = 'session_id') then
+    alter table map_jobs alter column session_id drop not null;
+  end if;
+end $$;
+-- The old Stripe columns and the credit_purchases table are no longer used; drop them when you're ready:
+-- alter table map_jobs drop column if exists stripe_payment_intent_id, drop column if exists stripe_checkout_session_id,
+--   drop column if exists paid_revisions_used, drop column if exists paid_at, drop column if exists email;
+-- drop table if exists credit_purchases;
 
--- ─── Credit packs (future / optional) ────────────────────────
-create table if not exists credit_purchases (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz default now(),
-  session_id text not null,
-  email text,
-  stripe_payment_intent_id text,
-  stripe_checkout_session_id text, -- guards the webhook against double-crediting on retry
-  credits_purchased integer,
-  credits_remaining integer,
-  pack_type text -- single | triple | five
-);
-
--- If you already ran this file before pack purchases existed, run this once:
--- alter table credit_purchases add column if not exists stripe_checkout_session_id text;
-
-create index if not exists credit_purchases_session_idx on credit_purchases (session_id);
-create unique index if not exists credit_purchases_checkout_idx
-  on credit_purchases (stripe_checkout_session_id)
-  where stripe_checkout_session_id is not null;
-
--- ─── Storage bucket for generated PDFs ───────────────────────
--- Private bucket; we hand out short-lived signed URLs from the server.
-insert into storage.buckets (id, name, public)
-values ('maps', 'maps', false)
-on conflict (id) do nothing;
+-- The daily-limit count and "My maps" both read by user, newest first.
+create index if not exists map_jobs_user_created_idx on map_jobs (user_id, created_at desc);
 
 -- ─── Row Level Security ──────────────────────────────────────
--- All privileged access goes through the server using the
--- service-role key (which bypasses RLS). We enable RLS and add
--- NO public policies, so the anon key cannot read/write directly.
+-- The server reads and writes with the service-role key (which bypasses RLS)
+-- after checking who is signed in. No public policies: the anon key can't touch
+-- these tables directly, so the daily limit can't be bypassed from the browser.
+alter table profiles enable row level security;
 alter table map_jobs enable row level security;
-alter table credit_purchases enable row level security;

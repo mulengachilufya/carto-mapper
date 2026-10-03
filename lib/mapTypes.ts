@@ -13,7 +13,7 @@ export interface MapTypeDef {
   id: MapType | "flow" | "buffer" | "annotation";
   name: string;
   tagline: string; // short "best for"
-  needs: "regions+value" | "regions" | "points" | "points+value" | "points+category";
+  needs: "regions+value" | "regions" | "points" | "points+value" | "points+category" | "none";
   ready: boolean;
   sample?: (geo: FeatureCollection) => { spec: MapSpec; data: Row[] };
 }
@@ -43,6 +43,23 @@ const baseFurniture = (over: Partial<MapSpec["furniture"]>) => ({
 });
 
 export const MAP_TYPES_CATALOGUE: MapTypeDef[] = [
+  {
+    id: "reference",
+    name: "Reference map",
+    tagline: "An atlas plate — provinces, districts or countries tinted and named. No data needed.",
+    needs: "none",
+    ready: true,
+    sample: () => ({
+      data: [],
+      spec: parseMapSpec({
+        title: "Africa: Political",
+        mapType: "reference",
+        style: "classic",
+        geography: { level: "continent", region: "Africa" },
+        furniture: baseFurniture({ legend: false, scalebar: false, graticule: true, labels: false }),
+      }),
+    }),
+  },
   {
     id: "choropleth",
     name: "Choropleth",
@@ -120,7 +137,7 @@ export const MAP_TYPES_CATALOGUE: MapTypeDef[] = [
           title: "Facilities by Type",
           mapType: "categorical_point",
           geography: { level: "country", region: "Zambia" },
-          data: { nameField: "name", latField: "latitude", lonField: "longitude", categoryField: s.roles.categoryField },
+          data: { nameField: "name", latField: "latitude", lonField: "longitude", categoryField: s.roles.categoryField, valueLabel: "Facility type" },
           symbology: { palette: "Set2", paletteKind: "qualitative" },
           furniture: baseFurniture({ graticule: false }),
         }),

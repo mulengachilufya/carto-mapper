@@ -1,9 +1,12 @@
-import { geoPath, geoGraticule10, type GeoPermissibleObjects } from "d3-geo";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { geoPath, geoGraticule10, geoContains, geoCentroid, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
 import { scaleSqrt } from "d3-scale";
 import type { Feature, FeatureCollection } from "geojson";
-import type { MapSpec } from "@/lib/mapspec/schema";
+import type { MapSpec, MapStyle } from "@/lib/mapspec/schema";
 import { chooseProjection } from "@/lib/cartography/projection";
-import { classify, classIndex, type ClassBreaks } from "@/lib/cartography/classify";
+import { classify, classIndex } from "@/lib/cartography/classify";
 import { getPaletteColors } from "@/lib/cartography/palettes";
 import { computeScaleBar, type ScaleBar } from "@/lib/cartography/scalebar";
 import { formatNumber } from "@/lib/cartography/format";
@@ -14,41 +17,124 @@ import {
   findCountry,
   continentBBoxPolygon,
   pointsBBoxPolygon,
-  bboxPolygon,
   normalizeName,
+  mainParts,
   type CountryFeature,
 } from "@/lib/cartography/geo";
+import { chooseJoin, type Subdivisions } from "@/lib/cartography/join";
+import { loadAtlasLayers, type AtlasLayers } from "@/lib/cartography/atlas";
+import { placeAtlasLabels, type MapLabel } from "@/lib/cartography/labels";
+import { renderRelief, TERRAIN_ATTRIBUTION, type ReliefImages, type ReliefMode } from "@/lib/cartography/relief";
 import type { Row } from "@/lib/data/parse";
 
 // Restrained, paper-and-ink palette — the quiet base a cartographer builds on.
 const THEME = {
-  paper: "#fdfdfb",
-  ocean: "#e8eef2",
-  land: "#e9e6dd",
-  noData: "#e0ddd4",
-  noDataHatch: "#cfccc1",
-  graticule: "#9aa6ae",
-  unitStroke: "#fbfbf8",
-  focusStroke: "#b9b3a5",
-  ink: "#23231d",
-  muted: "#6d6a61",
+  paper: "#fdfcf8",
+  water: "#dbe6ec", // sea on regional maps
+  sphere: "#e5edf1", // sea on world maps
+  land: "#e6e2d7", // context land (neighbours)
+  focusLand: "#fbfaf5", // the country the map is about
+  noData: "#dcd8ce",
+  graticule: "#aab8c0",
+  unitStroke: "#ffffff",
+  contextStroke: "#cbc5b6",
+  focusStroke: "#77715f",
+  ink: "#1f1f1a",
+  muted: "#66635a",
   neat: "#3a3a32",
-  panel: "#ffffff",
-  panelBorder: "#dcd9d0",
+  panel: "#fffffd",
+  panelBorder: "#d6d2c6",
   symbolStroke: "#ffffff",
+};
+
+/** Base-map colours per style. Data colours always come from the spec's palette. */
+const STYLE: Record<
+  MapStyle,
+  {
+    paper: string;
+    water: string;
+    sphere: string;
+    land: string;
+    focusLand: string;
+    border: string;
+    focusStroke: string;
+    noData: string;
+    graticule: string;
+    river?: string;
+    lake?: string;
+    pastels?: string[];
+    /** Neighbours over relief get a pale wash so the focus country reads first. */
+    reliefWash?: string;
+  }
+> = {
+  minimal: {
+    paper: THEME.paper,
+    water: THEME.water,
+    sphere: THEME.sphere,
+    land: THEME.land,
+    focusLand: THEME.focusLand,
+    border: THEME.contextStroke,
+    focusStroke: THEME.focusStroke,
+    noData: THEME.noData,
+    graticule: THEME.graticule,
+  },
+  atlas: {
+    paper: "#fbf8f0",
+    water: "#b9dbee",
+    sphere: "#b9dbee",
+    land: "#e4dfc4",
+    focusLand: "#e9eed2",
+    border: "#8a7666",
+    focusStroke: "#5a3b2c",
+    noData: "#e9e4d6",
+    graticule: "#5f86a3",
+    river: "#3576b8",
+    lake: "#a8d2ec",
+    reliefWash: "rgba(251,248,240,0.5)",
+  },
+  classic: {
+    paper: "#fbf7ee",
+    water: "#cde6f4",
+    sphere: "#cde6f4",
+    land: "#efe6cf",
+    focusLand: "#f5deaa",
+    border: "#8f7663",
+    focusStroke: "#6b4636",
+    noData: "#ebe4d3",
+    graticule: "#7fa8c6",
+    river: "#4a8ccc",
+    lake: "#cde6f4",
+    // Political-atlas pastels: sand, sage, rose, lavender, butter.
+    pastels: ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"],
+  },
 };
 
 interface Props {
   spec: MapSpec;
   data?: Row[];
   geo: FeatureCollection;
+  /** Provinces/districts of the focus country (see useSubdivisions). */
+  subdivisions?: Subdivisions;
+  /** Atlas reference layers; loaded automatically when omitted (pass null to skip). */
+  atlas?: AtlasLayers | null;
+  /** Relief pixels per SVG unit; defaults to 1.6 on screen, 2.4 for PDF. */
+  reliefResolution?: number;
   width: number;
   height: number;
   className?: string;
   forPdf?: boolean;
 }
 
-type Pt = { x: number; y: number; value: number; category?: string; name?: string };
+type Rect = { x: number; y: number; w: number; h: number };
+type Corner = "tl" | "tr" | "bl" | "br";
+type Extent = [[number, number], [number, number]];
+type Sym = { cx: number; cy: number; r: number; fill: string; name: string | undefined };
+
+type LegendModel = { title: string[]; w: number; h: number } & (
+  | { kind: "classes"; rows: { color: string; label: string; muted?: boolean }[] }
+  | { kind: "sizes"; color: string; maxR: number; sizes: { r: number; label: string }[] }
+  | { kind: "symbols"; rowH: number; rows: { color: string; r: number; label: string }[] }
+);
 
 function num(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -59,170 +145,678 @@ function num(v: unknown): number | null {
   return null;
 }
 
-const MARGIN = 26;
+/** Rough text width — good enough to size boxes without a DOM (works server-side and in PDF). */
+const textW = (s: string, size: number, bold = false) => s.length * size * (bold ? 0.58 : 0.54);
 
-function buildMap(spec: MapSpec, data: Row[], geo: FeatureCollection, width: number, height: number) {
+const isTop = (c: Corner) => c[0] === "t";
+const isLeft = (c: Corner) => c[1] === "l";
+
+function cornerRect(frame: Rect, c: Corner, w: number, h: number, pad: number): Rect {
+  return {
+    x: isLeft(c) ? frame.x + pad : frame.x + frame.w - pad - w,
+    y: isTop(c) ? frame.y + pad : frame.y + frame.h - pad - h,
+    w,
+    h,
+  };
+}
+
+const intersects = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+function wrapText(text: string, maxChars: number, maxLines = 2): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [""];
+  for (const w of words) {
+    const i = lines.length - 1;
+    if (!lines[i]) lines[i] = w;
+    else if ((lines[i] + " " + w).length <= maxChars) lines[i] += " " + w;
+    else if (lines.length < maxLines) lines.push(w);
+    else {
+      lines[i] += "…";
+      break;
+    }
+  }
+  return lines.filter(Boolean);
+}
+
+/** Largest 1·2·5 × 10ⁿ value not above x — for legend reference sizes. */
+function niceFloor(x: number): number {
+  if (!(x > 0)) return 0;
+  const pow = Math.pow(10, Math.floor(Math.log10(x)));
+  const f = x / pow;
+  return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * pow;
+}
+
+function humanize(s: string): string {
+  return s
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim()
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+const SYMBOL_TYPES = new Set(["proportional_symbol", "graduated_symbol", "dot", "point", "categorical_point"]);
+
+function buildMap(
+  spec: MapSpec,
+  data: Row[],
+  geo: FeatureCollection,
+  W: number,
+  H: number,
+  subdivisions: Subdivisions | undefined,
+  atlas: AtlasLayers | null,
+) {
+  // Everything is sized relative to the page so thumbnails, previews and PDFs share one layout.
+  const k = Math.max(0.4, Math.min(2, Math.min(W, H) / 600));
+  const f = spec.furniture;
+  const b = spec.branding;
+  const style = spec.style;
+  const T = STYLE[style];
   const level = spec.geography.level;
   const region = spec.geography.region ?? "";
-  const isSymbolMap =
-    spec.mapType === "proportional_symbol" ||
-    spec.mapType === "graduated_symbol" ||
-    spec.mapType === "dot" ||
-    spec.mapType === "point" ||
-    spec.mapType === "categorical_point";
+  const isWorld = level === "world";
+  const isSymbolMap = SYMBOL_TYPES.has(spec.mapType);
+  const isFootprint = spec.mapType === "footprint";
+  const isReference = spec.mapType === "reference";
+  const margin = 20 * k;
 
+  // ── Data join ──
   const nameIndex = buildNameIndex(geo);
   const focusFeature: CountryFeature | undefined =
-    level === "country" || level === "admin1" || level === "admin2"
-      ? region
-        ? findCountry(geo, region)
-        : undefined
+    (level === "country" || level === "admin1" || level === "admin2" || level === "city") && region
+      ? findCountry(geo, region)
       : undefined;
 
-  // Don't draw Antarctica on world maps — it carries no data and dominates an Equal-Earth page.
+  // Antarctica carries no data and dominates a world page.
   const drawn = (geo.features as CountryFeature[]).filter(
-    (f) => level !== "world" || normalizeName(f.properties.name) !== "antarctica",
+    (ft) => !isWorld || normalizeName(ft.properties.name) !== "antarctica",
   );
 
-  // Project points either from lat/lon columns or from matched-country centroids.
-  const rawPoints = extractPoints(spec, data, nameIndex);
+  const rawPoints = isSymbolMap ? extractPoints(spec, data, nameIndex) : [];
 
-  // Footprint: which drawn regions are highlighted (matched to the user's list).
-  const isFootprint = spec.mapType === "footprint";
+  // Region maps join place names to whichever boundaries they name: countries, or the
+  // focus country's provinces/districts (a province table must not render as "No data").
+  const isChoropleth = !isSymbolMap && !isFootprint && Boolean(spec.data.valueField && spec.data.nameField);
+  const isRegionMap = (isChoropleth || isFootprint) && Boolean(spec.data.nameField);
+  const subs = focusFeature ? subdivisions : undefined;
+  const join = isRegionMap
+    ? chooseJoin(
+        data.map((r) => r[spec.data.nameField!]).filter((v) => v != null).map(String),
+        geo,
+        subs,
+        level,
+      )
+    : null;
+  // A reference plate draws the units themselves: the provinces (or districts) of its country.
+  const referenceUnits: CountryFeature[] =
+    isReference && subs ? (((level === "admin2" ? subs.adm2 : subs.adm1)?.features ?? []) as CountryFeature[]) : [];
+  const regionUnits: CountryFeature[] = join && join.level !== "country" ? join.features : referenceUnits;
+  const joinable: CountryFeature[] = join?.level === "country" ? drawn : regionUnits;
+  const keyOf = (ft: CountryFeature) => join?.keyOf(ft) ?? "";
+
   const footprintMatched = new Set<string>();
   const footprintFeatures: CountryFeature[] = [];
-  if (isFootprint && spec.data.nameField) {
+  const valueByKey = new Map<string, number>();
+  if (join) {
     for (const row of data) {
-      const nm = row[spec.data.nameField];
+      const nm = row[spec.data.nameField!];
       if (nm == null) continue;
-      const f = matchFeature(String(nm), nameIndex);
-      if (f) {
-        footprintMatched.add(normalizeName(f.properties.name));
-        footprintFeatures.push(f);
+      const ft = join.match(String(nm));
+      if (!ft) continue;
+      if (isFootprint && !footprintMatched.has(keyOf(ft))) {
+        footprintMatched.add(keyOf(ft));
+        footprintFeatures.push(ft);
       }
+      const v = isChoropleth ? num(row[spec.data.valueField!]) : null;
+      if (v !== null) valueByKey.set(keyOf(ft), v);
+    }
+  }
+  const usesSubdivisions = Boolean(regionUnits.length || subs?.adm1);
+
+  // ── What the projection is fitted to ──
+  let fitObject: GeoPermissibleObjects;
+  if (isWorld) fitObject = { type: "Sphere" };
+  else if (level === "continent" && continentBBoxPolygon(region)) fitObject = continentBBoxPolygon(region)!;
+  else if (focusFeature) {
+    // Frame the mainland, but never crop away the user's own points.
+    const pts = pointsBBoxPolygon(rawPoints, 0.02);
+    fitObject = {
+      type: "FeatureCollection",
+      features: pts ? [mainParts(focusFeature), pts] : [mainParts(focusFeature)],
+    } as unknown as GeoPermissibleObjects;
+  }
+  else if (isFootprint && footprintFeatures.length)
+    fitObject = { type: "FeatureCollection", features: footprintFeatures } as unknown as GeoPermissibleObjects;
+  else if (rawPoints.length) fitObject = pointsBBoxPolygon(rawPoints) ?? { type: "Sphere" };
+  else if (isChoropleth && valueByKey.size)
+    fitObject = {
+      type: "FeatureCollection",
+      features: joinable.filter((ft) => valueByKey.has(keyOf(ft))),
+    } as unknown as GeoPermissibleObjects;
+  else fitObject = { type: "Sphere" };
+
+  // ── Classification / symbol scale (independent of the projection) ──
+  let classes: { breaks: number[]; colors: string[] } | null = null;
+  if (isChoropleth) {
+    const br = classify([...valueByKey.values()], spec.symbology.classification, spec.symbology.classes);
+    classes = {
+      breaks: br.breaks,
+      colors: getPaletteColors(spec.symbology.palette, br.classes, spec.symbology.reverse).slice(0, br.classes),
+    };
+  }
+  const colorFor = (v: number | undefined) =>
+    v === undefined || !classes ? T.noData : classes.colors[classIndex(v, classes.breaks)] ?? T.noData;
+  const hasNoData = isChoropleth && joinable.some((ft) => !valueByKey.has(keyOf(ft)));
+
+  const proportional = spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol";
+  const categorical = spec.mapType === "categorical_point";
+  const maxV = Math.max(1e-9, ...rawPoints.map((p) => Math.abs(p.value)).filter(Number.isFinite));
+  const maxR = spec.symbology.maxRadius * k;
+  const minR = Math.max(1.2, spec.symbology.minRadius * k);
+  // True proportional symbols: area ∝ value (r ∝ √v), floored so tiny values stay visible.
+  const rScale = scaleSqrt().domain([0, maxV]).range([0, maxR]);
+  const cats = categorical ? Array.from(new Set(rawPoints.map((p) => p.category || "Other"))) : [];
+  const catColors = getPaletteColors(
+    spec.symbology.paletteKind === "qualitative" ? spec.symbology.palette : "Dark2",
+    Math.max(3, cats.length),
+    false,
+  );
+  const colorForCat = (c?: string) => catColors[Math.max(0, cats.indexOf(c || "Other")) % catColors.length];
+  const seq = getPaletteColors(spec.symbology.palette, 7, spec.symbology.reverse);
+  const symbolFill = spec.symbology.paletteKind === "qualitative" ? seq[0] : seq[5];
+  // The user's own sites must out-rank the reference towns on atlas styles.
+  const pointR = spec.mapType === "dot" ? 2.6 * k : (spec.style === "minimal" ? 4.2 : 5.4) * k;
+  const radiusOf = (v: number) => (proportional ? Math.max(minR, rScale(Math.abs(v))) : pointR);
+
+  // ── Legend content ──
+  const legend = f.legend ? buildLegend() : null;
+
+  function buildLegend(): LegendModel | null {
+    const pad = 9 * k;
+    const titleSize = 10.5 * k;
+    const labelSize = 9 * k;
+    const titleText = (fallback: string) => wrapText(spec.data.valueLabel || fallback, 30, 2);
+    const box = (title: string[], contentW: number, contentH: number) => ({
+      w: pad * 2 + Math.max(contentW, ...title.map((t) => textW(t, titleSize, true))),
+      h: pad * 2 + title.length * titleSize * 1.2 + 5 * k + contentH,
+    });
+
+    if (isChoropleth && classes) {
+      const rows = classes.colors.map((color, i) => ({
+        color,
+        label:
+          classes!.colors.length === 1
+            ? formatNumber(classes!.breaks[0], spec.data.valueFormat)
+            : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} – ${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
+      }));
+      if (hasNoData) rows.push({ color: T.noData, label: "No data", muted: true } as (typeof rows)[number]);
+      const title = titleText("Value");
+      const labelW = Math.max(...rows.map((r) => textW(r.label, labelSize)));
+      return { kind: "classes", title, rows, ...box(title, 14 * k + 7 * k + labelW, rows.length * 15 * k - 3 * k) };
+    }
+
+    if (isFootprint) {
+      const title = titleText("Legend");
+      const label = spec.data.valueLabel ? "Included" : "Where we work";
+      const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
+      const rows = [{ color: accent, label }];
+      return {
+        kind: "classes",
+        title: spec.data.valueLabel ? title : [],
+        rows,
+        ...box(spec.data.valueLabel ? title : [], 21 * k + textW(label, labelSize), 12 * k),
+      };
+    }
+
+    if (!rawPoints.length) return null;
+
+    if (proportional) {
+      // Reference circles at round values, dropped when their labels would collide.
+      const vals = [niceFloor(maxV), niceFloor(maxV / 4), niceFloor(maxV / 16)].filter((v, i, a) => v > 0 && a.indexOf(v) === i);
+      const sizes: { r: number; label: string }[] = [];
+      for (const v of vals) {
+        const r = radiusOf(v);
+        const prev = sizes[sizes.length - 1];
+        if (!prev || 2 * (prev.r - r) >= labelSize * 1.15) sizes.push({ r, label: formatNumber(v, spec.data.valueFormat) });
+      }
+      const top = sizes[0]?.r ?? maxR;
+      const title = titleText("Value");
+      const labelW = Math.max(...sizes.map((s) => textW(s.label, labelSize)));
+      return { kind: "sizes", title, color: symbolFill, maxR: top, sizes, ...box(title, 2 * top + 10 * k + labelW, 2 * top) };
+    }
+
+    const r = Math.max(pointR, 3.5 * k);
+    const rowH = Math.max(15 * k, 2 * r + 5 * k);
+    if (categorical) {
+      const title = wrapText(spec.data.valueLabel || categoryTitle(spec.data.categoryField), 30, 2);
+      const rows = cats.map((c) => ({ color: colorForCat(c), r, label: c }));
+      const labelW = Math.max(...rows.map((row) => textW(row.label, labelSize)));
+      return { kind: "symbols", rowH, title, rows, ...box(title, 2 * r + 7 * k + labelW, rows.length * rowH - 4 * k) };
+    }
+    const label = spec.mapType === "dot" ? "1 dot = 1 record" : spec.data.valueLabel || "Location";
+    const rows = [{ color: symbolFill, r, label }];
+    return { kind: "symbols", rowH, title: [], rows, ...box([], 2 * r + 7 * k + textW(label, labelSize), rowH - 4 * k) };
+  }
+
+  // ── Header (title block + logo) ──
+  const titleSize = 22 * k;
+  const logoSize = b.logoDataUrl ? 46 * k : 0;
+  const titleMaxW = W - 2 * margin - (logoSize ? logoSize + 14 * k : 0);
+  const titleLines = f.title ? wrapText(spec.title, Math.max(12, Math.floor(titleMaxW / (titleSize * 0.47))), 2) : [];
+  const header: { text: string; y: number; kind: "title" | "subtitle" | "org" }[] = [];
+  let cursor = 0;
+  titleLines.forEach((t, i) => {
+    cursor += i === 0 ? titleSize * 0.82 : titleSize * 1.12;
+    header.push({ text: t, y: cursor, kind: "title" });
+  });
+  if (f.title && spec.subtitle) {
+    cursor += 17 * k;
+    header.push({ text: spec.subtitle, y: cursor, kind: "subtitle" });
+  }
+  if (f.title && b.organisation) {
+    cursor += 15 * k;
+    header.push({ text: b.organisation.toUpperCase(), y: cursor, kind: "org" });
+  }
+  const headerH = Math.max(cursor ? cursor + 12 * k : 0, logoSize ? logoSize + 10 * k : 0);
+
+  // ── Footer (caption, notes, source) ──
+  const footSize = 8.5 * k;
+  const footMaxChars = Math.floor((W - 2 * margin) / (footSize * 0.54));
+  const footer: { text: string; muted?: boolean }[] = [];
+  if (f.caption && spec.caption) wrapText(spec.caption, footMaxChars, 2).forEach((t) => footer.push({ text: t }));
+  if (b.notes) wrapText(b.notes, footMaxChars, 3).forEach((t) => footer.push({ text: t }));
+  if (f.source) {
+    let source = spec.source || "Boundaries: Natural Earth · Made with CartoMapper";
+    if (usesSubdivisions && !/geoboundaries/i.test(source)) source += " · Subdivisions: geoBoundaries (CC BY 4.0)";
+    if (style === "atlas" && !/terrain/i.test(source)) source += ` · ${TERRAIN_ATTRIBUTION}`;
+    footer.push({ text: source, muted: true });
+  }
+  const footLine = footSize * 1.35;
+  const footerH = footer.length ? 8 * k + footer.length * footLine : 0;
+
+  // ── Map frame + projection ──
+  let frame: Rect = { x: margin, y: margin + headerH, w: W - 2 * margin, h: H - 2 * margin - headerH - footerH };
+  const insetOf = (fr: Rect) => (isWorld ? 5 * k : Math.max(10 * k, 0.05 * Math.min(fr.w, fr.h)));
+  const extentOf = (fr: Rect): Extent => [
+    [fr.x + insetOf(fr), fr.y + insetOf(fr)],
+    [fr.x + fr.w - insetOf(fr), fr.y + fr.h - insetOf(fr)],
+  ];
+  const fit = (ext: Extent) => chooseProjection(level, fitObject, ext, spec.geography.projectionHint);
+
+  let projection = fit(extentOf(frame));
+  let legendBelow = false;
+
+  // World maps sit on bare paper, so trim the frame to the globe; the legend can then sit below it.
+  if (isWorld) {
+    const [[, y0], [, y1]] = geoPath(projection).bounds({ type: "Sphere" });
+    const tight = y1 - y0 + 2 * insetOf(frame);
+    const excess = frame.h - tight;
+    // Only worth it on tall pages; on landscape the globe simply sits centred in its frame.
+    if (excess > 0.25 * frame.h) {
+      legendBelow = Boolean(legend && excess >= legend.h + 12 * k);
+      frame = { ...frame, h: tight };
+      projection = fit(extentOf(frame));
     }
   }
 
-  // Decide what to fit the projection to.
-  let fitObject: GeoPermissibleObjects;
-  if (isFootprint && footprintFeatures.length)
-    fitObject = { type: "FeatureCollection", features: footprintFeatures } as unknown as GeoPermissibleObjects;
-  else if (level === "world") fitObject = bboxPolygon(-180, -58, 180, 85) as unknown as GeoPermissibleObjects;
-  else if (level === "continent") fitObject = continentBBoxPolygon(region) ?? geo;
-  else if (focusFeature) fitObject = focusFeature as unknown as GeoPermissibleObjects;
-  else if (rawPoints.length) fitObject = (pointsBBoxPolygon(rawPoints) as unknown as GeoPermissibleObjects) ?? geo;
-  else if (region) fitObject = findCountry(geo, region) ?? geo;
-  else fitObject = geo;
+  const projectSymbols = (proj: GeoProjection): Sym[] =>
+    rawPoints
+      .map((p): Sym | null => {
+        const xy = proj([p.lon, p.lat]);
+        if (!xy) return null;
+        return {
+          cx: xy[0],
+          cy: xy[1],
+          r: radiusOf(p.value),
+          fill: categorical ? colorForCat(p.category) : symbolFill,
+          name: p.name,
+        };
+      })
+      .filter((s): s is Sym => s !== null)
+      .sort((a, c) => c.r - a.r); // big first, so small symbols stay visible on top
 
-  const projection = chooseProjection(level, fitObject, width, height, MARGIN, spec.geography.projectionHint);
+  // ── Legend placement: emptiest corner, else refit the map to make room ──
+  const cornerPad = 8 * k;
+  let legendRect: Rect | null = null;
+  let legendCorner: Corner | null = null;
+  if (legend && legendBelow) {
+    legendRect = { x: frame.x, y: frame.y + frame.h + 12 * k, w: legend.w, h: legend.h };
+  } else if (legend) {
+    const weighted: { f: GeoPermissibleObjects; w: number }[] = [];
+    const isData = (ft: CountryFeature) =>
+      join ? valueByKey.has(keyOf(ft)) || footprintMatched.has(keyOf(ft)) : false;
+    for (const ft of [...drawn, ...regionUnits]) {
+      const important = isData(ft) || ft === focusFeature;
+      weighted.push({ f: ft as unknown as GeoPermissibleObjects, w: important ? 3 : isChoropleth ? 0.8 : 0.4 });
+    }
+    weighted.sort((a, c) => c.w - a.w);
+
+    const score = (proj: GeoProjection, rect: Rect) => {
+      const path = geoPath(proj);
+      const syms = projectSymbols(proj);
+      const items = weighted.map((it) => ({ ...it, b: path.bounds(it.f) }));
+      const nx = 9;
+      const ny = 6;
+      let total = 0;
+      for (let i = 0; i < nx; i++) {
+        for (let j = 0; j < ny; j++) {
+          const x = rect.x + ((i + 0.5) * rect.w) / nx;
+          const y = rect.y + ((j + 0.5) * rect.h) / ny;
+          let best = syms.some((s) => (x - s.cx) ** 2 + (y - s.cy) ** 2 <= (s.r + 2 * k) ** 2) ? 3 : 0;
+          let ll: [number, number] | null | undefined;
+          for (const it of items) {
+            if (it.w <= best) break;
+            const [[x0, y0], [x1, y1]] = it.b;
+            if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+            if (ll === undefined) ll = invertChecked(proj, x, y);
+            if (!ll) break;
+            if (geoContains(it.f, ll)) best = it.w;
+          }
+          total += best;
+        }
+      }
+      return total / (nx * ny);
+    };
+
+    const bias: Record<Corner, number> = { bl: 0, br: 0.02, tl: 0.04, tr: 0.05 };
+    let best: { c: Corner; s: number } | null = null;
+    for (const c of ["bl", "br", "tl", "tr"] as Corner[]) {
+      const s = score(projection, cornerRect(frame, c, legend.w, legend.h, cornerPad)) + bias[c];
+      if (!best || s < best.s) best = { c, s };
+    }
+    legendCorner = best!.c;
+
+    // Still covering the data? Shrink the map's extent away from the legend.
+    if (best!.s - bias[legendCorner] > 0.12) {
+      const gap = cornerPad + 6 * k + (isSymbolMap ? maxR * 0.5 : 0);
+      const [[x0, y0], [x1, y1]] = extentOf(frame);
+      const side: Extent = isLeft(legendCorner)
+        ? [[Math.max(x0, frame.x + cornerPad + legend.w + gap), y0], [x1, y1]]
+        : [[x0, y0], [Math.min(x1, frame.x + frame.w - cornerPad - legend.w - gap), y1]];
+      const updown: Extent = isTop(legendCorner)
+        ? [[x0, Math.max(y0, frame.y + cornerPad + legend.h + gap)], [x1, y1]]
+        : [[x0, y0], [x1, Math.min(y1, frame.y + frame.h - cornerPad - legend.h - gap)]];
+      const candidates = [side, updown]
+        .filter(([[a, c], [d, e]]) => d - a > 40 * k && e - c > 40 * k)
+        .map((ext) => fit(ext));
+      if (candidates.length) projection = candidates.reduce((p, q) => (q.scale() > p.scale() ? q : p));
+    }
+    legendRect = cornerRect(frame, legendCorner, legend.w, legend.h, cornerPad);
+  }
+
+  // ── Geometry under the final projection ──
   const path = geoPath(projection);
   const pathOf = (g: GeoPermissibleObjects) => path(g) ?? "";
 
-  const graticulePath = pathOf(geoGraticule10());
-  const showSphere = level === "world" || level === "continent";
-  const spherePath = showSphere ? pathOf({ type: "Sphere" }) : "";
+  const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
+  const regionFill = (ft: CountryFeature) =>
+    isChoropleth ? colorFor(valueByKey.get(keyOf(ft))) : footprintMatched.has(keyOf(ft)) ? accent : T.focusLand;
+  const countryLevelJoin = join?.level === "country";
+  const isDataUnit = (ft: CountryFeature) =>
+    Boolean(join) && (valueByKey.has(keyOf(ft)) || footprintMatched.has(keyOf(ft)));
 
-  // ── Choropleth join ──
-  let choropleth: {
-    units: { d: string; fill: string; name: string }[];
-    breaks: ClassBreaks;
-    colors: string[];
-    hasNoData: boolean;
-  } | null = null;
-
-  if (!isSymbolMap && spec.data.valueField && spec.data.nameField) {
-    const valueByName = new Map<string, number>();
-    for (const row of data) {
-      const v = num(row[spec.data.valueField]);
-      const nm = row[spec.data.nameField];
-      if (v === null || nm == null) continue;
-      const f = matchFeature(String(nm), nameIndex);
-      if (f) valueByName.set(normalizeName(f.properties.name), v);
+  // Each unit carries two fills: a vector one, and the one used once relief has loaded
+  // (transparent, so the terrain shows; neighbours washed back behind the focus).
+  const units = drawn.map((ft) => {
+    let fill = T.land;
+    let reliefFill: string | undefined = T.reliefWash ?? "none";
+    let stroke = T.border;
+    const isFocus = ft === focusFeature;
+    if (isReference && !focusFeature) {
+      const pastel = REF_PASTELS[(ft.properties.mapcolor ?? 0) % REF_PASTELS.length];
+      fill = style === "minimal" ? T.land : pastel;
+      reliefFill = style === "atlas" ? withAlpha(pastel, 0.42) : "none";
+    } else if (countryLevelJoin && (isChoropleth || isDataUnit(ft))) {
+      fill = regionFill(ft);
+      // Highlighted countries let the terrain breathe through; choropleth colours stay exact.
+      reliefFill = isDataUnit(ft) ? (isFootprint ? withAlpha(fill, 0.78) : fill) : T.reliefWash ?? T.noData;
+      stroke = style === "minimal" ? THEME.unitStroke : T.border;
+    } else if (T.pastels && (!focusFeature || isFocus)) {
+      fill = T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length];
+    } else if (isFocus || (!focusFeature && !isWorld)) {
+      fill = T.focusLand;
+      reliefFill = "none";
     }
-    const vals = [...valueByName.values()];
-    const breaks = classify(vals, spec.symbology.classification, spec.symbology.classes);
-    const colors = getPaletteColors(spec.symbology.palette, breaks.classes, spec.symbology.reverse);
-    let hasNoData = false;
-    const units = drawn.map((f) => {
-      const key = normalizeName(f.properties.name);
-      const v = valueByName.get(key);
-      if (v === undefined) hasNoData = true;
-      const fill = v === undefined ? THEME.noData : colors[classIndex(v, breaks.breaks)] ?? THEME.noData;
-      return { d: pathOf(f as unknown as GeoPermissibleObjects), fill, name: f.properties.name };
-    });
-    choropleth = { units, breaks, colors, hasNoData };
-  }
-
-  // ── Footprint (highlight matched regions) ──
-  let footprint: { units: { d: string; fill: string }[] } | null = null;
-  if (isFootprint) {
-    const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
-    footprint = {
-      units: drawn.map((f) => ({
-        d: pathOf(f as unknown as GeoPermissibleObjects),
-        fill: footprintMatched.has(normalizeName(f.properties.name)) ? accent : THEME.land,
-      })),
+    if (!focusFeature && !countryLevelJoin && !isReference) reliefFill = "none";
+    if (isFocus) reliefFill = "none";
+    if (countryLevelJoin && isFootprint && !isDataUnit(ft)) {
+      fill = T.pastels ? T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length] : T.land;
+      reliefFill = "none";
+    }
+    return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill, stroke, name: ft.properties.name, data: isDataUnit(ft) };
+  });
+  // Provinces/districts the data is joined to, drawn over their country.
+  const regions = regionUnits.map((ft) => {
+    if (isReference) {
+      const pastel = REF_PASTELS[(ft.properties.mapcolor ?? 0) % REF_PASTELS.length];
+      const fill = style === "minimal" ? (ft.properties.mapcolor ?? 0) % 2 ? "#f1ece0" : "#faf7ef" : pastel;
+      return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill: withAlpha(pastel, 0.42), name: ft.properties.name };
+    }
+    return {
+      d: pathOf(ft as unknown as GeoPermissibleObjects),
+      fill: regionFill(ft),
+      reliefFill: isChoropleth || isDataUnit(ft) ? regionFill(ft) : "none",
+      name: ft.properties.name,
     };
+  });
+  // Province lines for context: on locator/symbol maps, and over district shading.
+  const provinceLines =
+    subs?.adm1 && join?.level !== "adm1" && !(isReference && level === "admin1") ? pathOf(subs.adm1 as unknown as GeoPermissibleObjects) : "";
+  const provinceLineStyle = (join?.level === "adm2" && isChoropleth) || (isReference && level === "admin2") ? "over-districts" : "context";
+  const focusPath =
+    focusFeature && !countryLevelJoin ? pathOf(focusFeature as unknown as GeoPermissibleObjects) : "";
+
+  // Water-lined coasts (classic atlas engraving): strokes of the land outline under it.
+  const coastPath = style === "classic" ? pathOf({ type: "FeatureCollection", features: drawn } as unknown as GeoPermissibleObjects) : "";
+
+  // Rivers and lakes, thinned by importance for the map's scale.
+  const riverMaxRank = isWorld ? 3 : level === "continent" ? 6 : 10;
+  const rivers: { d: string; width: number }[] = [];
+  let lakesPath = "";
+  if (atlas && T.river) {
+    const byRank = new Map<number, GeoPermissibleObjects[]>();
+    for (const r of atlas.rivers.features) {
+      const rank = (r.properties as { rank: number }).rank;
+      if (rank > riverMaxRank) continue;
+      const band = Math.min(4, Math.floor(rank / 2.5));
+      if (!byRank.has(band)) byRank.set(band, []);
+      byRank.get(band)!.push(r as unknown as GeoPermissibleObjects);
+    }
+    for (const [band, list] of [...byRank.entries()].sort((a, c) => c[0] - a[0])) {
+      rivers.push({
+        d: pathOf({ type: "FeatureCollection", features: list } as unknown as GeoPermissibleObjects),
+        width: k * (isWorld ? 0.55 : 1.25) * Math.max(0.35, 1 - band * 0.2),
+      });
+    }
+    lakesPath = pathOf({
+      type: "FeatureCollection",
+      features: atlas.lakes.features.filter((l) => (l.properties as { rank: number }).rank <= riverMaxRank + 1),
+    } as unknown as GeoPermissibleObjects);
   }
 
-  // ── Base land (context for symbol maps / fallback) ──
-  const baseUnits =
-    choropleth === null && !isFootprint
-      ? drawn.map((f) => ({
-          d: pathOf(f as unknown as GeoPermissibleObjects),
-          isFocus: focusFeature ? f === focusFeature : false,
-        }))
+  // Terrain request (rendered asynchronously in the browser).
+  const hasDataFills = isChoropleth || isFootprint;
+  const reliefModes: ReliefMode[] =
+    style === "atlas" ? (hasDataFills ? ["atlas", "shade"] : ["atlas"]) : style === "classic" ? ["shade"] : [];
+
+  const symbols = projectSymbols(projection);
+  const graticulePath = f.graticule ? pathOf(geoGraticule10()) : "";
+  const spherePath = isWorld ? pathOf({ type: "Sphere" }) : "";
+
+  // ── North arrow + scale bar go in corners the legend doesn't use ──
+  const northCorner: Corner = legendCorner === "tr" ? "tl" : "tr";
+  const scaleCorner: Corner = legendCorner === "br" ? "bl" : "br";
+  const northRect = f.north_arrow ? cornerRect(frame, northCorner, 18 * k, 30 * k, 10 * k) : null;
+  const scalebar: ScaleBar | null =
+    f.scalebar && !isWorld
+      ? computeScaleBar(projection, [frame.x + frame.w / 2, frame.y + frame.h / 2], 100 * k)
+      : null;
+  const scaleRect = scalebar
+    ? cornerRect(frame, scaleCorner, scalebar.widthPx + 12 * k + textW(scalebar.label, 8 * k) / 2, 28 * k, 6 * k)
+    : null;
+
+  // ── Point labels (locator maps) ──
+  const labels =
+    spec.mapType === "point" && symbols.length <= 40
+      ? placeLabels(symbols, 8.5 * k, frame, [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null), k)
       : [];
 
-  // ── Symbols ──
-  let symbols: { cx: number; cy: number; r: number; fill: string }[] = [];
-  let symbolLegend: { sizes: { r: number; label: string }[]; categories: { color: string; label: string }[] } | null =
-    null;
+  // Reference plates name every unit, largest first, in spaced capitals (districts in
+  // small upright type); a name that doesn't fit inside its unit is left off, not squeezed.
+  const unitLabels: MapLabel[] = [];
+  const nameUnits = isReference || (isChoropleth && join?.level === "adm1" && regionUnits.length <= 24);
+  if (nameUnits && f.labels && regionUnits.length) {
+    const blocked: Rect[] = [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null);
+    const adm2 = level === "admin2";
+    const base = (adm2 ? 6.4 : 8.2) * k;
+    const spacing = adm2 ? 0.02 : 0.1;
+    const inner: Rect = { x: frame.x + 4 * k, y: frame.y + 4 * k, w: frame.w - 8 * k, h: frame.h - 8 * k };
+    const within = (r: Rect) => r.x >= inner.x && r.y >= inner.y && r.x + r.w <= inner.x + inner.w && r.y + r.h <= inner.y + inner.h;
+    const sorted = regionUnits
+      .map((ft) => ({ ft, main: mainParts(ft) }))
+      .map((u) => ({ ...u, area: path.area(u.main as unknown as GeoPermissibleObjects) }))
+      .sort((a, c) => c.area - a.area);
+    for (const { ft, main } of sorted) {
+      const name = unitName(ft.properties.name);
+      if (!name) continue;
+      const at = interiorPoint(ft, main);
+      const xy = at && projection(at);
+      if (!xy) continue;
+      const [[bx0, by0], [bx1, by1]] = path.bounds(main as unknown as GeoPermissibleObjects);
+      const text = adm2 ? name : name.toUpperCase();
+      for (const size of [base, base * 0.86, base * 0.74]) {
+        const lines = text.length > 11 && text.includes(" ") ? splitTwo(text) : [text];
+        const w = Math.max(...lines.map((l) => l.length * size * (0.6 + spacing)));
+        const h = lines.length * size * 1.12;
+        if (w > (bx1 - bx0) * 1.08 || h > (by1 - by0) * 0.95) continue;
+        const box: Rect = { x: xy[0] - w / 2, y: xy[1] - h / 2, w, h };
+        if (!within(box) || blocked.some((b2) => intersects(b2, box))) continue;
+        blocked.push(box);
+        unitLabels.push({
+          x: xy[0],
+          y: xy[1] - h / 2 + size * 0.85,
+          text: lines.join("\n"),
+          size,
+          role: "unit",
+          anchor: "middle",
+          letterSpacing: spacing,
+        });
+        break;
+      }
+    }
+  }
+  const unitLabelBoxes: Rect[] = unitLabels.map((l) => {
+    const lines = l.text.split("\n");
+    const w = Math.max(...lines.map((t) => t.length * l.size * (0.6 + (l.letterSpacing ?? 0))));
+    return { x: l.x - w / 2, y: l.y - l.size * 0.85, w, h: lines.length * l.size * 1.12 };
+  });
 
-  if (isSymbolMap && rawPoints.length) {
-    const projected = rawPoints
-      .map((p) => {
-        const xy = projection([p.lon, p.lat]);
-        return xy ? { ...p, x: xy[0], y: xy[1] } : null;
-      })
-      .filter((p): p is Pt & { lon: number; lat: number } => p !== null);
-
-    const values = projected.map((p) => Math.abs(p.value)).filter((v) => Number.isFinite(v));
-    const maxV = Math.max(...values, 1);
-    const rScale = scaleSqrt().domain([0, maxV]).range([spec.symbology.minRadius, spec.symbology.maxRadius]);
-
-    const categorical = spec.mapType === "categorical_point";
-    const cats = categorical
-      ? Array.from(new Set(projected.map((p) => p.category ?? "—")))
+  // Atlas reference labels: countries, cities, seas, lakes, peaks, regions.
+  const pointLabelBoxes: Rect[] = labels.map((l) => {
+    const w = textW(l.text, 8.5 * k);
+    const x = l.anchor === "start" ? l.x : l.anchor === "end" ? l.x - w : l.x - w / 2;
+    return { x, y: l.y - 8.5 * k * 0.9, w, h: 8.5 * k * 1.2 };
+  });
+  const atlasLabels: MapLabel[] =
+    style !== "minimal" && f.labels
+      ? placeAtlasLabels({
+          projection,
+          frame,
+          k,
+          level,
+          countries: drawn,
+          focus: focusFeature,
+          layers: atlas,
+          obstacles: [legendRect, northRect, scaleRect, ...pointLabelBoxes, ...unitLabelBoxes].filter((r): r is Rect => r !== null),
+          circles: symbols.map((sy) => ({ cx: sy.cx, cy: sy.cy, r: sy.r + 1.5 * k })),
+          quiet: isSymbolMap,
+          countryLabels: !(isChoropleth && regionUnits.length),
+        })
       : [];
-    const catColors = getPaletteColors(
-      spec.symbology.paletteKind === "qualitative" ? spec.symbology.palette : "Set2",
-      Math.max(3, cats.length),
-      false,
+
+  const footerTop = legendBelow && legendRect ? legendRect.y + legendRect.h : frame.y + frame.h;
+
+  return {
+    k,
+    margin,
+    header: header.map((h) => ({ ...h, y: h.y + margin })),
+    logo: logoSize ? { x: W - margin - logoSize, y: margin, size: logoSize } : null,
+    footer: footer.map((l, i) => ({ ...l, y: footerTop + 8 * k + (i + 0.8) * footLine })),
+    footSize,
+    frame,
+    isWorld,
+    style,
+    theme: T,
+    projection,
+    reliefModes,
+    coastPath,
+    rivers,
+    lakesPath,
+    atlasLabels: [...unitLabels, ...atlasLabels],
+    units,
+    regions,
+    provinceLines,
+    provinceLineStyle,
+    focusPath,
+    symbols,
+    labels,
+    graticulePath,
+    spherePath,
+    legend,
+    legendRect,
+    northRect,
+    scalebar,
+    scaleRect,
+  };
+}
+
+function withAlpha(hex: string, a: number): string {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})` : hex;
+}
+
+function categoryTitle(field?: string): string {
+  if (!field || /^(category|categories|type|class|kind)$/i.test(field.trim())) return "Type";
+  return humanize(field);
+}
+
+function invertChecked(proj: GeoProjection, x: number, y: number): [number, number] | null {
+  const ll = proj.invert?.([x, y]);
+  if (!ll || !Number.isFinite(ll[0]) || !Number.isFinite(ll[1])) return null;
+  const back = proj(ll);
+  if (!back || Math.hypot(back[0] - x, back[1] - y) > 1) return null;
+  return ll as [number, number];
+}
+
+function placeLabels(symbols: Sym[], size: number, frame: Rect, obstacles: Rect[], k: number) {
+  const placed: Rect[] = [];
+  const dots: Rect[] = symbols.map((s) => ({ x: s.cx - s.r, y: s.cy - s.r, w: 2 * s.r, h: 2 * s.r }));
+  const out: { x: number; y: number; anchor: "start" | "middle" | "end"; text: string }[] = [];
+  for (const s of symbols) {
+    if (!s.name) continue;
+    const w = textW(s.name, size);
+    const gap = s.r + 3 * k;
+    const options = [
+      { x: s.cx + gap, y: s.cy + size * 0.35, anchor: "start" as const, box: { x: s.cx + gap, y: s.cy - size * 0.6, w, h: size * 1.2 } },
+      { x: s.cx - gap, y: s.cy + size * 0.35, anchor: "end" as const, box: { x: s.cx - gap - w, y: s.cy - size * 0.6, w, h: size * 1.2 } },
+      { x: s.cx, y: s.cy - gap, anchor: "middle" as const, box: { x: s.cx - w / 2, y: s.cy - gap - size, w, h: size * 1.2 } },
+      { x: s.cx, y: s.cy + gap + size * 0.8, anchor: "middle" as const, box: { x: s.cx - w / 2, y: s.cy + gap - size * 0.1, w, h: size * 1.2 } },
+    ];
+    const ok = options.find(
+      (o) =>
+        o.box.x > frame.x + 4 * k &&
+        o.box.x + o.box.w < frame.x + frame.w - 4 * k &&
+        o.box.y > frame.y + 4 * k &&
+        o.box.y + o.box.h < frame.y + frame.h - 4 * k &&
+        !placed.some((p) => intersects(p, o.box)) &&
+        !obstacles.some((p) => intersects(p, o.box)) &&
+        !dots.some((d) => intersects(d, o.box)),
     );
-    const colorForCat = (c?: string) => catColors[Math.max(0, cats.indexOf(c ?? "—")) % catColors.length];
-    const baseFill = getPaletteColors(spec.symbology.palette, 5, spec.symbology.reverse)[3];
-
-    const proportional = spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol";
-    symbols = projected.map((p) => ({
-      cx: p.x,
-      cy: p.y,
-      r: proportional ? Math.max(1.5, rScale(Math.abs(p.value))) : spec.mapType === "dot" ? 2.4 : 5,
-      fill: categorical ? colorForCat(p.category) : baseFill,
-    }));
-
-    symbolLegend = {
-      sizes: proportional
-        ? [maxV, maxV / 2, maxV / 8]
-            .map((v) => ({ r: Math.max(1.5, rScale(v)), label: formatNumber(v, spec.data.valueFormat) }))
-        : [],
-      categories: categorical ? cats.map((c) => ({ color: colorForCat(c), label: c })) : [],
-    };
+    if (ok) {
+      placed.push(ok.box);
+      out.push({ x: ok.x, y: ok.y, anchor: ok.anchor, text: s.name });
+    }
   }
-
-  const scalebar: ScaleBar | null = computeScaleBar(projection, width, height);
-
-  return { choropleth, footprint, baseUnits, symbols, symbolLegend, graticulePath, spherePath, showSphere, scalebar };
+  return out;
 }
 
 function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, CountryFeature>) {
@@ -233,7 +827,7 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
     for (const r of data) {
       const lat = num(r[latField]);
       const lon = num(r[lonField]);
-      if (lat === null || lon === null) continue;
+      if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
       out.push({
         lat,
         lon,
@@ -250,9 +844,9 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
     for (const r of data) {
       const nm = r[nameField];
       if (nm == null) continue;
-      const f = matchFeature(String(nm), nameIndex);
-      if (!f) continue;
-      const [lon, lat] = centroidOf(f as unknown as Feature);
+      const ft = matchFeature(String(nm), nameIndex);
+      if (!ft) continue;
+      const [lon, lat] = centroidOf(ft as unknown as Feature);
       out.push({
         lat,
         lon,
@@ -265,30 +859,159 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
   return out;
 }
 
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [""];
-  for (const w of words) {
-    const i = lines.length - 1;
-    if (!lines[i]) lines[i] = w;
-    else if ((lines[i] + " " + w).length <= maxChars) lines[i] += " " + w;
-    else if (lines.length < 2) lines.push(w);
-    else {
-      lines[i] += "…";
-      break;
-    }
-  }
-  return lines;
+// Label typography by role — the conventions of a printed atlas: water in blue italic
+// serif, countries in spaced capitals, towns in a plain sans.
+const LABEL_STYLE: Record<MapLabel["role"], { fill: string; serif: boolean; italic?: boolean; weight?: number }> = {
+  country: { fill: "#6a5446", serif: true, weight: 600 },
+  "focus-city": { fill: "#1f1d1a", serif: false, weight: 600 },
+  city: { fill: "#5a544c", serif: false },
+  ocean: { fill: "#2c5f8f", serif: true, italic: true },
+  sea: { fill: "#2f6a9e", serif: true, italic: true },
+  lake: { fill: "#2f6a9e", serif: true, italic: true },
+  peak: { fill: "#4b3527", serif: false },
+  region: { fill: "#7a5a3a", serif: true, italic: true },
+  unit: { fill: "#4e3b2c", serif: true, weight: 600 },
+};
+
+/** Political-atlas tints for reference plates: sand, sage, rose, lavender, butter. */
+const REF_PASTELS = ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"];
+
+/** "Copperbelt Province" → "Copperbelt": the plate's title already says what the units are. */
+function unitName(name: string | undefined): string {
+  return String(name ?? "")
+    .replace(/\s+(province|region|district|state|county|governorate|prefecture|department|oblast|municipality)$/i, "")
+    .trim();
 }
 
-export function CartoMap({ spec, data = [], geo, width, height, className, forPdf }: Props) {
-  const m = buildMap(spec, data, geo, width, height);
-  const f = spec.furniture;
-  const b = spec.branding;
+function splitTwo(text: string): string[] {
+  const words = text.split(" ");
+  let best = [text];
+  let bestW = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ");
+    const b = words.slice(i).join(" ");
+    const w = Math.max(a.length, b.length);
+    if (w < bestW) {
+      bestW = w;
+      best = [a, b];
+    }
+  }
+  return best;
+}
+
+/** A point inside the unit for its label: the centroid if it falls inside, else the middle of its widest row. */
+function interiorPoint(ft: CountryFeature, main: Feature): [number, number] | null {
+  const c = geoCentroid(main as never) as [number, number];
+  if (geoContains(ft as never, c)) return c;
+  const g = main.geometry;
+  const ring = g.type === "Polygon" ? g.coordinates[0] : g.type === "MultiPolygon" ? g.coordinates[0][0] : null;
+  if (!ring) return null;
+  const lats = ring.map((p) => p[1]);
+  const lat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const xs: number[] = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    if ((y1 - lat) * (y2 - lat) < 0) xs.push(x1 + ((lat - y1) * (x2 - x1)) / (y2 - y1));
+  }
+  xs.sort((a, b) => a - b);
+  let best: [number, number] | null = null;
+  let span = 0;
+  for (let i = 0; i + 1 < xs.length; i += 2) {
+    if (xs[i + 1] - xs[i] > span) {
+      span = xs[i + 1] - xs[i];
+      best = [(xs[i] + xs[i + 1]) / 2, lat];
+    }
+  }
+  return best;
+}
+
+function useAtlasLayers(enabled: boolean, provided: AtlasLayers | null | undefined) {
+  const [layers, setLayers] = useState<AtlasLayers | null>(null);
+  useEffect(() => {
+    if (!enabled || provided !== undefined) return;
+    let alive = true;
+    loadAtlasLayers().then((l) => alive && setLayers(l));
+    return () => {
+      alive = false;
+    };
+  }, [enabled, provided]);
+  return provided !== undefined ? provided : enabled ? layers : null;
+}
+
+export function CartoMap({
+  spec,
+  data = [],
+  geo,
+  subdivisions,
+  atlas,
+  reliefResolution,
+  width,
+  height,
+  className,
+  forPdf,
+}: Props) {
+  const layers = useAtlasLayers(spec.style !== "minimal", atlas);
+  const m = useMemo(
+    () => buildMap(spec, data, geo, width, height, subdivisions, layers),
+    [spec, data, geo, width, height, subdivisions, layers],
+  );
+  const { k, frame } = m;
+  const T = m.theme;
+
+  // Terrain renders in the browser after layout; the vector map shows meanwhile.
+  const pixelRatio = reliefResolution ?? (forPdf ? 2.4 : 1.6);
+  const reliefKey = m.reliefModes.length
+    ? [
+        m.reliefModes.join("+"),
+        m.projection.scale(),
+        ...m.projection.translate(),
+        ...m.projection.rotate(),
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        pixelRatio,
+      ]
+        .map((v) => (typeof v === "number" ? v.toFixed(3) : v))
+        .join("|")
+    : "";
+  const [relief, setRelief] = useState<{ key: string; images: ReliefImages } | null>(null);
+  useEffect(() => {
+    if (!reliefKey) return;
+    let alive = true;
+    const paper = T.paper.match(/\w\w/g)!.map((h) => parseInt(h, 16)) as [number, number, number];
+    renderRelief({ projection: m.projection, frame, pixelRatio, modes: m.reliefModes, paper })
+      .then((images) => alive && setRelief({ key: reliefKey, images: images ?? {} }))
+      .catch(() => alive && setRelief({ key: reliefKey, images: {} }));
+    return () => {
+      alive = false;
+    };
+    // reliefKey captures everything the image depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reliefKey]);
+  const images = relief?.key === reliefKey ? relief.images : null;
+  const hasRelief = Boolean(images?.atlas);
+  const reliefState = !reliefKey ? "none" : images ? "ready" : "pending";
+
   // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
   const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
   const sans = forPdf ? "helvetica" : "var(--font-sans, 'Inter', system-ui, sans-serif)";
-  const titleLines = wrapText(spec.title, 38);
+  const id = [frame.x, frame.y, frame.w, frame.h].map((v) => Math.round(v)).join("-");
+  const clipId = `cm-clip-${id}`;
+  const dataClipId = `cm-data-${id}-${m.units.filter((u) => u.data).length}-${m.regions.length}`;
+  const dataUnits = [...m.units.filter((u) => u.data), ...m.regions];
+  const img = (href: string) => (
+    <image
+      href={href}
+      x={frame.x}
+      y={frame.y}
+      width={frame.w}
+      height={frame.h}
+      preserveAspectRatio="none"
+      clipPath={m.isWorld ? `url(#${clipId}-sphere)` : undefined}
+    />
+  );
 
   return (
     <svg
@@ -296,322 +1019,335 @@ export function CartoMap({ spec, data = [], geo, width, height, className, forPd
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       data-cartomap-ready="true"
+      data-relief={reliefState}
       className={className}
-      style={{ fontFamily: sans, display: "block", background: THEME.paper }}
+      style={{ fontFamily: sans, display: "block", background: T.paper }}
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Ocean / paper ground */}
-      {m.showSphere ? (
-        <path d={m.spherePath} fill={THEME.ocean} stroke={THEME.neat} strokeWidth={0.6} />
-      ) : (
-        <rect x={0} y={0} width={width} height={height} fill={THEME.paper} />
-      )}
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
+        </clipPath>
+        {m.isWorld && (
+          <clipPath id={`${clipId}-sphere`}>
+            <path d={m.spherePath} />
+          </clipPath>
+        )}
+        {images?.shade && m.style === "atlas" && dataUnits.length > 0 && (
+          <clipPath id={dataClipId}>
+            {dataUnits.map((u, i) => (
+              <path key={i} d={u.d} />
+            ))}
+          </clipPath>
+        )}
+      </defs>
+      <rect x={0} y={0} width={width} height={height} fill={T.paper} />
 
-      {/* Graticule */}
-      {f.graticule && (
-        <path d={m.graticulePath} fill="none" stroke={THEME.graticule} strokeWidth={0.4} strokeOpacity={0.5} />
-      )}
-
-      {/* Base land (symbol maps) */}
-      {m.baseUnits.map((u, i) => (
-        <path
-          key={`b${i}`}
-          d={u.d}
-          fill={u.isFocus ? "#efece3" : THEME.land}
-          stroke={THEME.unitStroke}
-          strokeWidth={0.4}
-        />
-      ))}
-
-      {/* Choropleth units */}
-      {m.choropleth?.units.map((u, i) => (
-        <path key={`u${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4}>
-          <title>{u.name}</title>
-        </path>
-      ))}
-
-      {/* Footprint highlight */}
-      {m.footprint?.units.map((u, i) => (
-        <path key={`fp${i}`} d={u.d} fill={u.fill} stroke={THEME.unitStroke} strokeWidth={0.4} />
-      ))}
-
-      {/* Symbols */}
-      {m.symbols.map((s, i) => (
-        <circle
-          key={`s${i}`}
-          cx={s.cx}
-          cy={s.cy}
-          r={s.r}
-          fill={s.fill}
-          fillOpacity={0.78}
-          stroke={THEME.symbolStroke}
-          strokeWidth={0.6}
-        />
-      ))}
-
-      {/* Neatline */}
-      <rect
-        x={MARGIN / 2}
-        y={MARGIN / 2}
-        width={width - MARGIN}
-        height={height - MARGIN}
-        fill="none"
-        stroke={THEME.neat}
-        strokeWidth={1}
-      />
-
-      {/* Title block */}
-      {f.title && (
-        <g>
-          {titleLines.map((line, i) => (
-            <text
-              key={i}
-              x={MARGIN}
-              y={MARGIN + 18 + i * 24}
-              style={{ fontFamily: serif }}
-              fontSize={24}
-              fontWeight={600}
-              fill={THEME.ink}
-            >
-              {line}
-            </text>
+      {/* ── Map body, clipped to the frame ── */}
+      <g clipPath={`url(#${clipId})`}>
+        <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill={m.isWorld ? T.paper : T.water} />
+        {m.isWorld && <path d={m.spherePath} fill={T.sphere} />}
+        {images?.atlas && img(images.atlas)}
+        {m.graticulePath && (
+          <path d={m.graticulePath} fill="none" stroke={T.graticule} strokeWidth={0.35 * k} strokeOpacity={hasRelief ? 0.45 : 0.6} />
+        )}
+        {m.coastPath &&
+          [14, 9, 5.5, 2.6].map((w, i) => (
+            <path key={`wl${i}`} d={m.coastPath} fill="none" stroke="#5f9bc7" strokeOpacity={0.07 + i * 0.05} strokeWidth={w * k} strokeLinejoin="round" />
           ))}
-          {spec.subtitle && (
-            <text
-              x={MARGIN}
-              y={MARGIN + 18 + titleLines.length * 24 - 6}
-              style={{ fontFamily: sans }}
-              fontSize={12.5}
-              fill={THEME.muted}
-            >
-              {spec.subtitle}
-            </text>
-          )}
-          {b.organisation && (
-            <text
-              x={MARGIN}
-              y={MARGIN + 18 + titleLines.length * 24 + (spec.subtitle ? 12 : 2)}
-              style={{ fontFamily: sans, letterSpacing: "0.08em" }}
-              fontSize={10.5}
-              fontWeight={600}
-              fill={THEME.muted}
-            >
-              {b.organisation.toUpperCase()}
-            </text>
-          )}
-        </g>
-      )}
-
-      {/* Logo */}
-      {b.logoDataUrl && (
-        <image
-          href={b.logoDataUrl}
-          x={width - MARGIN - 52}
-          y={MARGIN}
-          width={52}
-          height={52}
-          preserveAspectRatio="xMidYMid meet"
-        />
-      )}
-
-      {/* North arrow */}
-      {f.north_arrow && <NorthArrow x={width - MARGIN - 16} y={MARGIN + 12 + (b.logoDataUrl ? 58 : 0)} />}
-
-      {/* Branding notes */}
-      {b.notes && (
-        <g style={{ fontFamily: sans }}>
-          {wrapText(b.notes, 95).map((line, i) => (
-            <text key={i} x={MARGIN} y={height - MARGIN - 14 + i * 11} fontSize={9} fill={THEME.muted}>
-              {line}
-            </text>
+        {m.units.map((u, i) => (
+          <path
+            key={`u${i}`}
+            d={u.d}
+            fill={hasRelief ? u.reliefFill : u.fill}
+            stroke={u.stroke}
+            strokeWidth={(m.style === "minimal" ? 0.45 : 0.6) * k}
+            strokeLinejoin="round"
+          >
+            <title>{u.name}</title>
+          </path>
+        ))}
+        {m.regions.map((u, i) => (
+          <path key={`r${i}`} d={u.d} fill={hasRelief ? u.reliefFill : u.fill} stroke={THEME.unitStroke} strokeWidth={0.4 * k} strokeLinejoin="round">
+            <title>{u.name}</title>
+          </path>
+        ))}
+        {/* Terrain texture over data colours (atlas: only on the data; classic: all land). */}
+        {images?.shade &&
+          (m.style === "atlas" ? (
+            dataUnits.length > 0 && (
+              <g clipPath={`url(#${dataClipId})`} opacity={0.75}>
+                {img(images.shade)}
+              </g>
+            )
+          ) : (
+            <g opacity={0.55}>{img(images.shade)}</g>
           ))}
-        </g>
-      )}
+        {m.lakesPath && <path d={m.lakesPath} fill={T.lake} stroke={T.river} strokeWidth={0.35 * k} />}
+        {m.rivers.map((r, i) => (
+          <path key={`rv${i}`} d={r.d} fill="none" stroke={T.river} strokeWidth={r.width} strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {m.provinceLines && (
+          <path
+            d={m.provinceLines}
+            fill="none"
+            stroke={m.provinceLineStyle === "over-districts" ? THEME.unitStroke : m.style === "minimal" ? THEME.contextStroke : T.border}
+            strokeWidth={(m.provinceLineStyle === "over-districts" ? 1.3 : 0.6) * k}
+            strokeDasharray={m.style !== "minimal" && m.provinceLineStyle === "context" ? `${2.2 * k} ${1.6 * k}` : undefined}
+            strokeOpacity={m.style === "minimal" ? 1 : 0.8}
+            strokeLinejoin="round"
+          />
+        )}
+        {m.focusPath && (
+          <path d={m.focusPath} fill="none" stroke={T.focusStroke} strokeWidth={(m.style === "minimal" ? 1.1 : 1.4) * k} strokeLinejoin="round" />
+        )}
+        {m.isWorld && <path d={m.spherePath} fill="none" stroke={THEME.muted} strokeWidth={0.6 * k} />}
+        {m.symbols.map((s, i) => (
+          <circle
+            key={`s${i}`}
+            cx={s.cx}
+            cy={s.cy}
+            r={s.r}
+            fill={s.fill}
+            fillOpacity={s.r > 6 * k ? 0.78 : 0.95}
+            stroke={THEME.symbolStroke}
+            strokeWidth={(m.style === "minimal" ? 0.7 : 1.4) * k}
+          >
+            {s.name && <title>{s.name}</title>}
+          </circle>
+        ))}
+        {m.atlasLabels.map((l, i) => (
+          <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} />
+        ))}
+        {m.labels.map((l, i) => (
+          <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }} fontWeight={600}>
+            <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={T.paper} strokeWidth={2.6 * k} strokeLinejoin="round" strokeOpacity={0.9}>
+              {l.text}
+            </text>
+            <text x={l.x} y={l.y} textAnchor={l.anchor} fill={THEME.ink}>
+              {l.text}
+            </text>
+          </g>
+        ))}
+      </g>
 
-      {/* Scale bar */}
-      {f.scalebar && m.scalebar && (
-        <ScaleBarMark
-          x={width - MARGIN - m.scalebar.widthPx - 8}
-          y={height - MARGIN - 26}
-          bar={m.scalebar}
-          sans={sans}
+      {/* Neatline — a double rule on atlas styles, like a printed plate */}
+      <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="none" stroke={THEME.neat} strokeWidth={0.9 * k} />
+      {m.style !== "minimal" && (
+        <rect
+          x={frame.x - 3 * k}
+          y={frame.y - 3 * k}
+          width={frame.w + 6 * k}
+          height={frame.h + 6 * k}
+          fill="none"
+          stroke={THEME.neat}
+          strokeWidth={0.4 * k}
         />
       )}
 
-      {/* Legend */}
-      {f.legend && m.choropleth && (
-        <ChoroplethLegend
-          x={MARGIN}
-          y={height - MARGIN - legendHeight(m.choropleth.colors.length, m.choropleth.hasNoData)}
-          spec={spec}
-          breaks={m.choropleth.breaks}
-          colors={m.choropleth.colors}
-          hasNoData={m.choropleth.hasNoData}
-          serif={serif}
-          sans={sans}
-        />
-      )}
-      {f.legend && m.symbolLegend && (m.symbolLegend.sizes.length > 0 || m.symbolLegend.categories.length > 0) && (
-        <SymbolLegend x={MARGIN} y={height - MARGIN - 10} spec={spec} legend={m.symbolLegend} serif={serif} sans={sans} />
-      )}
-
-      {/* Caption + source */}
-      {f.caption && spec.caption && (
-        <text x={MARGIN} y={height - MARGIN + 14} style={{ fontFamily: sans }} fontSize={11} fill={THEME.muted}>
-          {spec.caption}
-        </text>
-      )}
-      {f.source && (
+      {/* ── Title block ── */}
+      {m.header.map((h, i) => (
         <text
-          x={width - MARGIN}
-          y={height - MARGIN + 14}
-          textAnchor="end"
-          style={{ fontFamily: sans }}
-          fontSize={10}
-          fill={THEME.muted}
+          key={`h${i}`}
+          x={m.margin}
+          y={h.y}
+          style={{ fontFamily: h.kind === "title" ? serif : sans, letterSpacing: h.kind === "org" ? "0.08em" : undefined }}
+          fontSize={(h.kind === "title" ? 22 : h.kind === "subtitle" ? 11.5 : 9) * k}
+          fontWeight={h.kind === "subtitle" ? 400 : 700}
+          fill={h.kind === "title" ? THEME.ink : THEME.muted}
         >
-          {spec.source || "Boundaries: Natural Earth · Made with CartoMapper"}
+          {h.text}
         </text>
+      ))}
+      {m.logo && spec.branding.logoDataUrl && (
+        <image
+          href={spec.branding.logoDataUrl}
+          x={m.logo.x}
+          y={m.logo.y}
+          width={m.logo.size}
+          height={m.logo.size}
+          preserveAspectRatio="xMaxYMin meet"
+        />
       )}
+
+      {m.northRect && <NorthArrow rect={m.northRect} k={k} />}
+      {m.scalebar && m.scaleRect && <ScaleBarMark rect={m.scaleRect} bar={m.scalebar} k={k} sans={sans} />}
+      {m.legend && m.legendRect && (
+        <Legend model={m.legend} rect={m.legendRect} k={k} serif={serif} sans={sans} boxed={!m.isWorld || m.legendRect.y < frame.y + frame.h} />
+      )}
+
+      {/* ── Footer ── */}
+      {m.footer.map((l, i) => (
+        <text key={`f${i}`} x={m.margin} y={l.y} style={{ fontFamily: sans }} fontSize={m.footSize} fill={l.muted ? THEME.muted : THEME.ink}>
+          {l.text}
+        </text>
+      ))}
     </svg>
   );
 }
 
-function legendHeight(classes: number, hasNoData = false) {
-  return 26 + (classes + (hasNoData ? 1 : 0)) * 18;
+function AtlasLabel({ label: l, k, serif, sans }: { label: MapLabel; k: number; serif: string; sans: string }) {
+  const st = LABEL_STYLE[l.role];
+  const lines = l.text.split("\n");
+  const common = {
+    x: l.x,
+    textAnchor: l.anchor,
+    fontSize: l.size,
+    fontStyle: st.italic ? "italic" : undefined,
+    fontWeight: st.weight,
+    style: { fontFamily: st.serif ? serif : sans, letterSpacing: l.letterSpacing ? `${l.letterSpacing}em` : undefined },
+  } as const;
+  const body = (props: Record<string, unknown>) =>
+    lines.map((line, i) => (
+      <text key={i} {...common} {...props} y={l.y + i * l.size * 1.1}>
+        {line}
+      </text>
+    ));
+  const m = l.marker;
+  return (
+    <g>
+      {m?.kind === "capital" && (
+        <g>
+          <circle cx={m.x} cy={m.y} r={2.9 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />
+          <circle cx={m.x} cy={m.y} r={1.3 * k} fill="#b3261e" />
+        </g>
+      )}
+      {m?.kind === "provincial" && <circle cx={m.x} cy={m.y} r={2 * k} fill="#2a211b" stroke="#fffdf6" strokeWidth={0.7 * k} />}
+      {m?.kind === "town" && <circle cx={m.x} cy={m.y} r={1.6 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />}
+      {m?.kind === "peak" && (
+        <polygon
+          points={`${m.x},${m.y - 3 * k} ${m.x + 2.8 * k},${m.y + 2 * k} ${m.x - 2.8 * k},${m.y + 2 * k}`}
+          fill="#3b2a20"
+        />
+      )}
+      {body({ fill: "none", stroke: "#fffcf2", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
+      {body({ fill: st.fill })}
+    </g>
+  );
 }
 
-function NorthArrow({ x, y }: { x: number; y: number }) {
+function NorthArrow({ rect, k }: { rect: Rect; k: number }) {
+  const cx = rect.x + rect.w / 2;
+  const top = rect.y + 11 * k;
   return (
-    <g transform={`translate(${x},${y})`}>
-      <polygon points="0,-10 4,6 0,2 -4,6" fill={THEME.ink} />
-      <text x={0} y={-13} textAnchor="middle" fontSize={11} fontWeight={700} fill={THEME.ink}>
+    <g>
+      <polygon
+        points={`${cx},${top} ${cx + 5 * k},${top + 16 * k} ${cx},${top + 12 * k}`}
+        fill={THEME.ink}
+        stroke={THEME.ink}
+        strokeWidth={0.6 * k}
+        strokeLinejoin="round"
+      />
+      <polygon
+        points={`${cx},${top} ${cx - 5 * k},${top + 16 * k} ${cx},${top + 12 * k}`}
+        fill={THEME.paper}
+        stroke={THEME.ink}
+        strokeWidth={0.6 * k}
+        strokeLinejoin="round"
+      />
+      <text x={cx} y={rect.y + 8 * k} textAnchor="middle" fontSize={9.5 * k} fontWeight={700} fill={THEME.ink}>
         N
       </text>
     </g>
   );
 }
 
-function ScaleBarMark({ x, y, bar, sans }: { x: number; y: number; bar: ScaleBar; sans: string }) {
+function ScaleBarMark({ rect, bar, k, sans }: { rect: Rect; bar: ScaleBar; k: number; sans: string }) {
+  const x = rect.x + 8 * k;
+  const y = rect.y + 15 * k;
+  const h = 4 * k;
+  const q = bar.widthPx / 4;
   return (
-    <g transform={`translate(${x},${y})`} style={{ fontFamily: sans }}>
-      <rect x={0} y={0} width={bar.widthPx / 2} height={5} fill={THEME.ink} />
-      <rect x={bar.widthPx / 2} y={0} width={bar.widthPx / 2} height={5} fill={THEME.paper} stroke={THEME.ink} strokeWidth={0.8} />
-      <rect x={0} y={0} width={bar.widthPx} height={5} fill="none" stroke={THEME.ink} strokeWidth={0.8} />
-      <text x={0} y={-4} fontSize={9.5} fill={THEME.ink}>
+    <g style={{ fontFamily: sans }}>
+      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={2 * k} fill={THEME.panel} fillOpacity={0.85} />
+      {[0, 1, 2, 3].map((i) => (
+        <rect key={i} x={x + i * q} y={y} width={q} height={h} fill={i % 2 ? THEME.panel : THEME.ink} />
+      ))}
+      <rect x={x} y={y} width={bar.widthPx} height={h} fill="none" stroke={THEME.ink} strokeWidth={0.7 * k} />
+      <text x={x} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={THEME.ink}>
         0
       </text>
-      <text x={bar.widthPx} y={-4} textAnchor="end" fontSize={9.5} fill={THEME.ink}>
+      <text x={x + bar.widthPx} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={THEME.ink}>
         {bar.label}
       </text>
     </g>
   );
 }
 
-function ChoroplethLegend({
-  x,
-  y,
-  spec,
-  breaks,
-  colors,
-  hasNoData,
+function Legend({
+  model,
+  rect,
+  k,
   serif,
   sans,
+  boxed,
 }: {
-  x: number;
-  y: number;
-  spec: MapSpec;
-  breaks: ClassBreaks;
-  colors: string[];
-  hasNoData: boolean;
+  model: LegendModel;
+  rect: Rect;
+  k: number;
   serif: string;
   sans: string;
+  boxed: boolean;
 }) {
-  const title = spec.data.valueLabel || "Value";
-  const rows = colors.map((c, i) => ({
-    color: c,
-    label: `${formatNumber(breaks.breaks[i], spec.data.valueFormat)} – ${formatNumber(breaks.breaks[i + 1], spec.data.valueFormat)}`,
-  }));
-  const w = 168;
-  const h = legendHeight(colors.length, hasNoData);
+  const pad = 9 * k;
+  const titleSize = 10.5 * k;
+  const labelSize = 9 * k;
+  const top = pad + model.title.length * titleSize * 1.2 + (model.title.length ? 5 * k : 0);
   return (
-    <g transform={`translate(${x},${y})`}>
-      <rect x={-8} y={-18} width={w} height={h} rx={3} fill={THEME.panel} stroke={THEME.panelBorder} strokeWidth={1} opacity={0.96} />
-      <text x={0} y={-4} style={{ fontFamily: serif }} fontSize={12.5} fontWeight={600} fill={THEME.ink}>
-        {title}
-      </text>
-      {rows.map((r, i) => (
-        <g key={i} transform={`translate(0,${i * 18 + 6})`} style={{ fontFamily: sans }}>
-          <rect x={0} y={0} width={16} height={12} fill={r.color} stroke={THEME.panelBorder} strokeWidth={0.5} />
-          <text x={22} y={10} fontSize={10.5} fill={THEME.ink}>
-            {r.label}
-          </text>
-        </g>
+    <g transform={`translate(${rect.x},${rect.y})`}>
+      {boxed && (
+        <rect width={rect.w} height={rect.h} rx={2.5 * k} fill={THEME.panel} fillOpacity={0.94} stroke={THEME.panelBorder} strokeWidth={0.8 * k} />
+      )}
+      {model.title.map((t, i) => (
+        <text
+          key={i}
+          x={pad}
+          y={pad + titleSize * (0.85 + i * 1.2)}
+          style={{ fontFamily: serif }}
+          fontSize={titleSize}
+          fontWeight={700}
+          fill={THEME.ink}
+        >
+          {t}
+        </text>
       ))}
-      {hasNoData && (
-        <g transform={`translate(0,${rows.length * 18 + 6})`} style={{ fontFamily: sans }}>
-          <rect x={0} y={0} width={16} height={12} fill={THEME.noData} stroke={THEME.panelBorder} strokeWidth={0.5} />
-          <text x={22} y={10} fontSize={10.5} fill={THEME.muted}>
-            No data
-          </text>
-        </g>
-      )}
-    </g>
-  );
-}
-
-function SymbolLegend({
-  x,
-  y,
-  spec,
-  legend,
-  serif,
-  sans,
-}: {
-  x: number;
-  y: number;
-  spec: MapSpec;
-  legend: { sizes: { r: number; label: string }[]; categories: { color: string; label: string }[] };
-  serif: string;
-  sans: string;
-}) {
-  const title = spec.data.valueLabel || (legend.categories.length ? "Category" : "Value");
-  const maxR = legend.sizes[0]?.r ?? 10;
-  const blockH = 30 + (legend.sizes.length ? maxR * 2 + 16 : 0) + legend.categories.length * 16;
-  const w = 168;
-  return (
-    <g transform={`translate(${x},${y - blockH})`}>
-      <rect x={-8} y={-16} width={w} height={blockH} rx={3} fill={THEME.panel} stroke={THEME.panelBorder} strokeWidth={1} opacity={0.96} />
-      <text x={0} y={-2} style={{ fontFamily: serif }} fontSize={12.5} fontWeight={600} fill={THEME.ink}>
-        {title}
-      </text>
-      {/* Nested proportional circles */}
-      {legend.sizes.length > 0 && (
-        <g transform={`translate(${maxR + 4}, ${maxR + 10})`} style={{ fontFamily: sans }}>
-          {legend.sizes.map((s, i) => (
-            <g key={i}>
-              <circle cx={0} cy={maxR - s.r} r={s.r} fill="none" stroke={THEME.muted} strokeWidth={0.9} />
-              <line x1={0} y1={maxR - s.r * 2} x2={maxR + 18} y2={maxR - s.r * 2} stroke={THEME.panelBorder} strokeWidth={0.6} />
-              <text x={maxR + 22} y={maxR - s.r * 2 + 3} fontSize={9.5} fill={THEME.ink}>
-                {s.label}
+      <g style={{ fontFamily: sans }} fontSize={labelSize}>
+        {model.kind === "classes" &&
+          model.rows.map((r, i) => (
+            <g key={i} transform={`translate(${pad},${top + i * 15 * k})`}>
+              <rect width={14 * k} height={10 * k} fill={r.color} stroke={THEME.panelBorder} strokeWidth={0.5 * k} />
+              <text x={21 * k} y={8.5 * k} fill={r.muted ? THEME.muted : THEME.ink}>
+                {r.label}
               </text>
             </g>
           ))}
-        </g>
-      )}
-      {/* Category swatches */}
-      {legend.categories.length > 0 && (
-        <g transform="translate(0,8)" style={{ fontFamily: sans }}>
-          {legend.categories.map((c, i) => (
-            <g key={i} transform={`translate(0,${i * 16})`}>
-              <circle cx={6} cy={6} r={5} fill={c.color} fillOpacity={0.8} stroke={THEME.symbolStroke} strokeWidth={0.6} />
-              <text x={18} y={9} fontSize={10.5} fill={THEME.ink}>
-                {c.label}
+        {model.kind === "sizes" && (
+          <g transform={`translate(${pad + model.maxR},${top})`}>
+            {model.sizes.map((s, i) => {
+              const cy = 2 * model.maxR - s.r;
+              const ty = cy - s.r;
+              return (
+                <g key={i}>
+                  <circle cy={cy} r={s.r} fill={model.color} fillOpacity={0.18} stroke={THEME.muted} strokeWidth={0.8 * k} />
+                  <line x1={0} y1={ty} x2={model.maxR + 6 * k} y2={ty} stroke={THEME.muted} strokeWidth={0.5 * k} strokeDasharray={`${1.5 * k} ${1.5 * k}`} />
+                  <text x={model.maxR + 9 * k} y={ty + labelSize * 0.35} fill={THEME.ink}>
+                    {s.label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
+        {model.kind === "symbols" &&
+          model.rows.map((r, i) => (
+            <g key={i} transform={`translate(${pad},${top + i * model.rowH})`}>
+              <circle cx={r.r} cy={model.rowH / 2 - 2 * k} r={r.r} fill={r.color} stroke={THEME.symbolStroke} strokeWidth={0.7 * k} />
+              <text x={2 * r.r + 7 * k} y={model.rowH / 2 - 2 * k + labelSize * 0.35} fill={THEME.ink}>
+                {r.label}
               </text>
             </g>
           ))}
-        </g>
-      )}
+      </g>
     </g>
   );
 }

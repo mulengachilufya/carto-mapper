@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CartoMap } from "@/components/cartography/CartoMap";
 import { useCountries } from "@/components/cartography/useCountries";
+import { useSubdivisions } from "@/components/cartography/useSubdivisions";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
-import { getSessionId } from "@/lib/session";
+import { downloadSvgFile } from "@/lib/svg-download";
 import type { MapSpec } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
 
@@ -16,70 +17,44 @@ interface Stash {
   jobId?: string | null;
 }
 
-type Gate = "checking" | "ok" | "blocked" | "check-failed";
-
+/** A saved map, ready to download again: this tab's copy, else the one in the user's account. */
 export function DownloadPanel() {
   const { geo } = useCountries("50m");
   const exportRef = useRef<HTMLDivElement>(null);
   const [stash, setStash] = useState<Stash | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [gate, setGate] = useState<Gate>("checking");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const subdivisions = useSubdivisions(stash?.spec, geo);
 
-  // Load whatever the wizard stashed, plus the job id from either the stash
-  // or the ?job= param Stripe redirects back with.
   useEffect(() => {
-    let stashedJobId: string | null = null;
+    const urlJob = new URLSearchParams(window.location.search).get("job");
+    let local: Stash | null = null;
     try {
       const raw = sessionStorage.getItem("cartomapper:lastMap");
-      if (raw) {
-        const parsed = JSON.parse(raw) as Stash;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time init from sessionStorage on mount
-        setStash(parsed);
-        stashedJobId = parsed.jobId ?? null;
-      }
+      if (raw) local = JSON.parse(raw) as Stash;
     } catch {
       /* ignore */
     }
-    const urlJobId = new URLSearchParams(window.location.search).get("job");
-    setJobId(stashedJobId ?? urlJobId ?? null);
-    setLoaded(true);
+    if (local && (!urlJob || local.jobId === urlJob)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time init from sessionStorage on mount
+      setStash(local);
+      setLoaded(true);
+      return;
+    }
+    if (!urlJob) {
+      setLoaded(true);
+      return;
+    }
+    fetch(`/api/job?jobId=${encodeURIComponent(urlJob)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setStash({ spec: j.spec, data: j.data, title: j.title, jobId: j.jobId }))
+      .finally(() => setLoaded(true));
   }, []);
 
-  // The actual gate: ask the server whether this job is paid. Never trust the
-  // ?paid=1 URL param — it's just there for a nicer success-page message.
-  useEffect(() => {
-    if (!loaded) return;
-    if (!jobId) {
-      // No job on record at all — nothing in Supabase to check against, which
-      // only happens with Stripe/Supabase unconfigured (local dev). Don't block.
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time gate resolution on mount
-      setGate("ok");
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/job-status?jobId=${encodeURIComponent(jobId)}`)
-      .then((r) => r.json())
-      .then((d: { paid?: boolean }) => {
-        if (!cancelled) setGate(d.paid ? "ok" : "blocked");
-      })
-      .catch(() => {
-        if (!cancelled) setGate("check-failed");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loaded, jobId]);
-
   async function downloadPdf() {
-    if (gate !== "ok") return; // belt and suspenders — button is disabled anyway
     const svg = exportRef.current?.querySelector("svg");
-    if (!stash || !svg) {
-      setError("The map isn't ready yet — give it a second and try again.");
-      return;
-    }
+    if (!stash || !svg) return;
     setBusy(true);
     setError(null);
     try {
@@ -91,107 +66,74 @@ export function DownloadPanel() {
     }
   }
 
-  async function resumeCheckout() {
-    if (!jobId || !stash) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, sessionId: getSessionId(), title: stash.title }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (data.url) window.location.href = data.url;
-      else setError(data.error ?? "Couldn't start checkout.");
-    } catch {
-      setError("Couldn't start checkout. Check your connection and try again.");
-    } finally {
-      setBusy(false);
-    }
+  function downloadSvg() {
+    const svg = exportRef.current?.querySelector("svg");
+    if (stash && svg) downloadSvgFile(svg as SVGSVGElement, stash.title);
   }
 
   if (!loaded) return null;
 
   if (!stash) {
     return (
-      <div className="rounded-2xl border border-line bg-paper p-8 text-center">
-        <h1 className="font-serif text-2xl font-semibold">We couldn't find your map</h1>
-        <p className="mt-2 text-muted">
-          Maps are tied to the browser tab you created them in. If you've closed it, you can make a new one in a
-          minute.
-        </p>
-        <div className="mt-6">
-          <Button href="/create">Create a map</Button>
+      <div className="plate text-center">
+        <div className="p-8">
+          <h1 className="display text-3xl font-semibold text-ink">We couldn&apos;t find that map</h1>
+          <p className="mt-3 text-muted">It may have been removed. Your saved maps are all on your maps page.</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Button href="/account" variant="secondary">
+              My maps
+            </Button>
+            <Button href="/create">Make a map</Button>
+          </div>
         </div>
       </div>
     );
   }
 
   const pdf = pagePt(stash.spec.page);
+  const landscape = stash.spec.page.orientation === "landscape";
+  const W = landscape ? 880 : 620;
+  const H = Math.round(landscape ? W / Math.SQRT2 : W * Math.SQRT2);
 
   return (
-    <div className="rounded-2xl border border-line bg-paper p-8 text-center shadow-sm">
-      <span
-        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-          gate === "ok" ? "bg-accent/10 text-accent-2" : "bg-amber-100 text-amber-800"
-        }`}
-      >
-        <span className={`h-1.5 w-1.5 rounded-full ${gate === "ok" ? "bg-accent" : "bg-amber-500"}`} />
-        {gate === "checking" && "Confirming your payment…"}
-        {gate === "ok" && "Payment received — thank you!"}
-        {gate === "blocked" && "Payment required"}
-        {gate === "check-failed" && "Couldn't confirm payment"}
-      </span>
-      <h1 className="mt-4 font-serif text-3xl font-semibold tracking-tight">{stash.title}</h1>
-
-      {gate === "blocked" && (
-        <p className="mt-2 text-muted">
-          This map hasn't been paid for yet, so the download is locked. Finish checkout to unlock the PDF.
-        </p>
-      )}
-      {gate === "check-failed" && (
-        <p className="mt-2 text-muted">We couldn't reach the server to confirm your payment. Try again in a moment.</p>
-      )}
-      {gate === "ok" && (
-        <p className="mt-2 text-muted">Download your print-ready PDF below. You can re-download while this tab stays open.</p>
-      )}
-
-      <div className="mt-6 flex flex-col items-center gap-3">
-        {gate === "ok" && (
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow text-atlas-leather">Ready to print</p>
+          <h1 className="display mt-2 text-3xl font-semibold text-ink sm:text-4xl">{stash.title}</h1>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={downloadSvg} disabled={!geo} variant="secondary">
+            SVG for designers
+          </Button>
           <Button onClick={downloadPdf} disabled={busy || !geo} size="lg">
             {busy ? "Preparing your PDF…" : !geo ? "Loading…" : "Download PDF"}
           </Button>
+        </div>
+      </div>
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+
+      <div className="mt-6 overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
+        {geo ? (
+          <CartoMap spec={stash.spec} data={stash.data} geo={geo} subdivisions={subdivisions} width={W} height={H} className="h-auto w-full" />
+        ) : (
+          <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
         )}
-        {gate === "blocked" && (
-          <Button onClick={resumeCheckout} disabled={busy} size="lg">
-            {busy ? "Redirecting…" : "Complete payment — $5"}
-          </Button>
-        )}
-        {gate === "check-failed" && (
-          <Button onClick={() => setGate("checking")} size="lg">
-            Try again
-          </Button>
-        )}
-        {gate === "checking" && (
-          <Button disabled size="lg">
-            Confirming…
-          </Button>
-        )}
-        {error && <p className="max-w-md text-sm text-red-600">{error}</p>}
-        <Button href="/create" variant="ghost">
-          Create another map
+      </div>
+
+      <div className="mt-6 flex flex-wrap justify-between gap-3">
+        <Button href="/account" variant="ghost">
+          ← My maps
+        </Button>
+        <Button href="/create" variant="secondary">
+          Make another map
         </Button>
       </div>
 
-      {/* Hidden, print-font copy used only for client-side PDF export */}
-      {geo && gate === "ok" && (
-        <div
-          ref={exportRef}
-          aria-hidden
-          style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
-        >
-          <CartoMap spec={stash.spec} data={stash.data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+      {/* The print copy, with PDF-safe fonts. */}
+      {geo && (
+        <div ref={exportRef} aria-hidden style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}>
+          <CartoMap spec={stash.spec} data={stash.data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
         </div>
       )}
     </div>

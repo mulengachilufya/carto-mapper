@@ -1,7 +1,8 @@
-# CartoMapper — setup guide (Netlify + Firebase)
+# CartoMapper — setup guide
 
-Take the build from code → running → live. **Good news:** the app runs and generates maps
-with **no backend at all** — so you can deploy to Netlify first and add Firebase later.
+CartoMapper is **free**. People sign up (like Lenga Maps: name, country, what they do,
+email, password) and can make **up to 10 new maps in any 24 hours**. Changing a map and
+downloading it again never count. There is no payment, premium tier or watermark.
 
 ---
 
@@ -12,74 +13,73 @@ cd "C:\Users\Mapalo L. Moonze\Documents\carto-mapper-repo"
 npm run dev
 ```
 
-Open http://localhost:3000. The whole create flow + map preview + **SVG download** work
-with zero keys (the map spec uses the built-in cartographic rules engine).
-
-> Node may not be on your terminal PATH until you restart it. If `npm` isn't found, it's at
-> `C:\Program Files\nodejs`.
+Open http://localhost:3000. Without Supabase keys the site runs **open**: no sign-in, no
+saving, no daily limit, and the map designer uses the built-in rules engine unless
+`ANTHROPIC_API_KEY` is set. Add the keys below to try accounts locally (`.env.local`).
 
 ---
 
-## 2. Accounts you'll use
+## 2. Services
 
 | Service | Why | Needed to launch? |
 |---|---|---|
 | [Netlify](https://netlify.com) | hosting | **Yes** |
-| [Stripe](https://dashboard.stripe.com) | the $5 charge | Yes, to take payment (test mode is free) |
-| [Anthropic](https://console.anthropic.com) | AI‑tailored map specs | Optional (rules engine works without it) |
-| [Firebase](https://console.firebase.google.com) | save jobs / re‑downloads | **Later** — not required for launch |
+| [Supabase](https://supabase.com) | accounts, saved maps, the daily limit | **Yes** — a **new** project for CartoMapper, not the Lenga Maps one |
+| [Anthropic](https://console.anthropic.com) | the AI cartographer | Recommended (the rules engine works without it) |
+| [Resend](https://resend.com) | the welcome email | Recommended (sign-up works without it) |
 
 ---
 
-## 3. Deploy to Netlify
+## 3. Supabase (accounts + the 10-maps-a-day limit)
 
-1. Push this repo to GitHub (done — `mulengachilufya/carto-mapper`).
-2. Netlify → **Add new site → Import an existing project** → pick the repo.
-3. Netlify auto‑detects Next.js. Build command `npm run build` (already in `netlify.toml`).
-4. **Site configuration → Environment variables** — add what you have:
-   - `NEXT_PUBLIC_APP_URL` = your Netlify URL (e.g. `https://cartomapper.netlify.app`)
-   - `ANTHROPIC_API_KEY` *(optional)*
-   - `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` *(for payments)*
-5. **Deploy.**
+1. Create a new Supabase project for CartoMapper.
+2. **SQL editor** → paste and run `supabase/schema.sql`. It creates `profiles` (filled from
+   the sign-up form by a trigger) and `map_jobs` (each saved map, owned by a user), with
+   row-level security on and no public policies — only the server touches them. Safe to
+   re-run; it also upgrades a database from the old paid version.
+3. **Authentication → Sign In / Providers → Email**: enabled, and **Confirm email off**.
+   People are signed in the moment they register and go straight to the map maker.
+4. **Authentication → URL Configuration**:
+   - *Site URL*: `https://cartomapper.online`
+   - *Redirect URLs*: add `https://cartomapper.online/auth/callback`
+     (and `http://localhost:3000/auth/callback` for local testing). Deploy previews:
+     `https://*--cartomapper.netlify.app/auth/callback`.
+5. Supabase's built-in mailer then only sends password-reset emails; its few-per-hour
+   limit is fine for that. No custom SMTP needed.
+6. **Project Settings → API**: copy the URL, the `anon` key and the `service_role` key
+   into the environment variables below.
 
-> **Next.js 16 note:** this app uses Next 16. If Netlify's Next runtime complains, pin the
-> runtime or uncomment the `@netlify/plugin-nextjs` plugin in `netlify.toml`.
+**Welcome email** (`lib/email.ts`): every new account gets one welcome email, sent by
+the site through [Resend](https://resend.com) (the same service Lenga Maps uses). In
+Resend: **Domains → Add domain** → `cartomapper.online`, add the DNS records it shows,
+then **API Keys → Create** and set `RESEND_API_KEY` in Netlify. The sender defaults to
+`CartoMapper <hello@cartomapper.online>` (override with `RESEND_FROM`). Without the key,
+sign-up still works; the welcome email is just skipped.
 
----
-
-## 4. Stripe (the $5 payment)
-
-1. Stripe → Developers → API keys → copy **test** secret + publishable keys into Netlify env.
-2. Stripe → Developers → **Webhooks** → add endpoint
-   `https://YOUR-SITE.netlify.app/api/stripe/webhook`, event `checkout.session.completed`,
-   and copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. Local testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
-
----
-
-## 5. PDF export — done (client-side)
-
-PDF export runs **in the browser** (`jsPDF` + `svg2pdf.js`): the map is already a clean SVG,
-so the PDF is built client‑side — no server, no headless Chrome. Works on Netlify (and any
-host) out of the box. (An SVG download is also available in the preview.)
-
----
-
-## 6. Firebase (later — for saving jobs & re‑downloads)
-
-The app does **not** need a database to sell a map (the buyer downloads right after paying).
-Firebase adds: persisting each job, and letting buyers re‑download later.
-
-When you're ready, create a Firebase project (Firestore + Storage) and **ask me to wire it** —
-it's a small, self‑contained change (swap the optional Supabase adapter in `lib/` and the
-best‑effort writes in the API routes for Firestore). I'll add the `firebase-admin` env vars
-to `.env.local.example` at that point.
+**How the limit works** (`lib/quota.ts`, `app/api/generate-spec/route.ts`): every new map
+is a row in `map_jobs`; before the map designer runs, the server counts the user's rows from
+the last 24 hours and refuses the 11th with a friendly message saying when the next slot
+frees up. Changes to a map update its row (up to 20 per map) and don't count; removing a
+map from "My maps" is a soft delete, so it still counts. Sign-in is checked on the server
+with Supabase Auth on every request — the limit can't be bypassed from the browser.
 
 ---
 
-## What's pending (needs you, or a quick task for me)
-- **You:** create Netlify + Stripe (+ later Firebase) accounts and add the env vars above.
-- **Me, on your go:** wire Firebase (Firestore + Storage) for saving jobs / re‑downloads.
-- Deferred: sub‑national (province/district) boundaries — only country‑level geodata is bundled.
+## 4. Deploy to Netlify
 
-See `PROGRESS.md` for the full build status.
+1. Netlify → **Add new site → Import an existing project** → `mulengachilufya/carto-mapper`.
+2. Build command `npm run build` (already in `netlify.toml`).
+3. **Site configuration → Environment variables**:
+   - `NEXT_PUBLIC_APP_URL` = your live URL
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+     — all three switch accounts on; with any missing the site runs open
+   - `ANTHROPIC_API_KEY` *(recommended)*
+   - `RESEND_API_KEY` *(for the welcome email)*
+4. **Deploy.** Old `STRIPE_*` variables can be deleted.
+
+---
+
+## 5. PDF export (client-side)
+
+PDFs are built **in the browser** (`jsPDF` + `svg2pdf.js`) from the map's SVG, terrain
+included — no server rendering. An SVG download is offered alongside for designers.

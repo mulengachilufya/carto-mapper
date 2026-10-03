@@ -4,9 +4,12 @@ import { useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import { Button } from "@/components/ui/Button";
 import { CartoMap } from "@/components/cartography/CartoMap";
-import { buildNameIndex, matchFeature } from "@/lib/cartography/geo";
+import { useSubdivisions } from "@/components/cartography/useSubdivisions";
+import { chooseJoin } from "@/lib/cartography/join";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
-import { parseMapSpec, type MapSpec, type Furniture } from "@/lib/mapspec/schema";
+import { downloadSvgFile } from "@/lib/svg-download";
+import { CHANGES_PER_MAP } from "@/lib/quota-rules";
+import { parseMapSpec, type Decision, type MapSpec, type Furniture } from "@/lib/mapspec/schema";
 import type { Row } from "@/lib/data/parse";
 
 interface Props {
@@ -16,14 +19,17 @@ interface Props {
   setSpec: (spec: MapSpec) => void;
   onRevise: (text: string) => void;
   onBack: () => void;
-  onPay: () => void;
+  /** Called when the user downloads, so the saved copy matches what they took. */
+  onDownloaded: () => void;
   revisionsUsed: number;
   busy: boolean;
-  paymentEnabled: boolean;
+  /** Saved to the user's account (false when accounts are off). */
+  saved: boolean;
 }
 
 const FURNITURE_TOGGLES: { key: keyof Furniture; label: string }[] = [
   { key: "title", label: "Title" },
+  { key: "labels", label: "Place names" },
   { key: "legend", label: "Legend" },
   { key: "scalebar", label: "Scale bar" },
   { key: "north_arrow", label: "North arrow" },
@@ -32,8 +38,13 @@ const FURNITURE_TOGGLES: { key: keyof Furniture; label: string }[] = [
   { key: "source", label: "Source line" },
 ];
 
-export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay, revisionsUsed, busy, paymentEnabled }: Props) {
-  const frameRef = useRef<HTMLDivElement>(null);
+const STYLES: { id: MapSpec["style"]; label: string; hint: string }[] = [
+  { id: "atlas", label: "Atlas", hint: "Relief & rivers" },
+  { id: "classic", label: "Classic", hint: "Political pastels" },
+  { id: "minimal", label: "Minimal", hint: "Paper & ink" },
+];
+
+export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDownloaded, revisionsUsed, busy, saved }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [revision, setRevision] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -43,22 +54,17 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
   const H = Math.round(landscape ? W / Math.SQRT2 : W * Math.SQRT2);
   const pdf = pagePt(spec.page);
 
-  // For choropleths, how many place names actually matched a country?
+  const subdivisions = useSubdivisions(spec, geo);
+
+  // For region maps, how many place names matched a country / province / district?
   const coverage = useMemo(() => {
-    if (!geo || spec.mapType !== "choropleth" || !spec.data.nameField) return null;
-    const idx = buildNameIndex(geo);
-    const seen = new Set<string>();
-    let matched = 0;
-    for (const row of data) {
-      const nm = row[spec.data.nameField];
-      if (nm == null) continue;
-      const key = String(nm);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (matchFeature(key, idx)) matched++;
-    }
-    return { total: seen.size, matched };
-  }, [geo, spec.mapType, spec.data.nameField, data]);
+    const field = spec.data.nameField;
+    if (!geo || (spec.mapType !== "choropleth" && spec.mapType !== "footprint") || !field) return null;
+    const names = Array.from(new Set(data.map((r) => r[field]).filter((v) => v != null).map(String)));
+    const join = chooseJoin(names, geo, subdivisions, spec.geography.level);
+    const noun = join.level === "adm1" ? "provinces/states" : join.level === "adm2" ? "districts" : "countries";
+    return { total: names.length, matched: names.filter((n) => join.match(n)).length, noun };
+  }, [geo, subdivisions, spec.mapType, spec.data.nameField, spec.geography.level, data]);
 
   const setFurniture = (key: keyof Furniture, value: boolean) =>
     setSpec(parseMapSpec({ ...spec, furniture: { ...spec.furniture, [key]: value } }));
@@ -67,18 +73,10 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
     setSpec(parseMapSpec({ ...spec, page: { ...spec.page, ...patch } }));
 
   const downloadSvg = () => {
-    const svg = frameRef.current?.querySelector("svg");
+    const svg = exportRef.current?.querySelector("svg");
     if (!svg) return;
-    const clone = svg.cloneNode(true) as SVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    const str = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([str], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${slug(spec.title)}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadSvgFile(svg as SVGSVGElement, spec.title);
+    onDownloaded();
   };
 
   const exportPdf = async () => {
@@ -87,6 +85,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
     setExporting(true);
     try {
       await exportSvgToPdf(svg as SVGSVGElement, spec.page, slug(spec.title));
+      onDownloaded();
     } catch {
       /* ignore */
     } finally {
@@ -103,28 +102,57 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
   return (
     <div>
-      <h2 className="font-serif text-2xl font-semibold tracking-tight">Your map</h2>
-      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Get the print-ready PDF.</p>
+      <h2 className="display text-4xl font-semibold text-ink">Your map</h2>
+      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Download the print-ready PDF — it&apos;s free.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Map */}
         <div>
-          <div ref={frameRef} className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-line bg-paper shadow-sm">
             {geo ? (
-              <CartoMap spec={spec} data={data} geo={geo} width={W} height={H} className="h-auto w-full" />
+              <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={W} height={H} className="h-auto w-full" />
             ) : (
               <div className="aspect-[3/2] w-full animate-pulse bg-paper-2" />
             )}
           </div>
+          {spec.decisions?.length ? (
+            <DecisionLog decisions={spec.decisions} />
+          ) : (
+            spec.notes &&
+            !/^Generated by/i.test(spec.notes) && (
+              <details className="mt-4 rounded-lg border border-line bg-paper px-4 py-3 text-sm" open>
+                <summary className="cursor-pointer font-medium text-ink">Why it looks this way</summary>
+                <p className="mt-2 leading-relaxed text-muted">{spec.notes}</p>
+              </details>
+            )
+          )}
           {coverage && coverage.matched < coverage.total && (
             <p className="mt-2 text-[13px] text-amber-700">
-              Matched {coverage.matched} of {coverage.total} place names — unmatched places stay uncoloured (shown as “No data”). Check spelling or try full country names.
+              Matched {coverage.matched} of {coverage.total} place names to {coverage.noun} — unmatched places stay uncoloured (shown as “No data”). Check the spelling against official names.
             </p>
           )}
         </div>
 
         {/* Controls */}
         <aside className="space-y-6">
+          <Panel title="Style">
+            <div className="grid grid-cols-3 gap-2">
+              {STYLES.map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setSpec(parseMapSpec({ ...spec, style: st.id }))}
+                  className={`rounded-lg border px-2 py-2 text-left text-sm transition-colors ${
+                    spec.style === st.id ? "border-accent bg-accent/10 text-ink" : "border-line text-muted hover:border-accent/50 hover:text-ink"
+                  }`}
+                >
+                  <span className="block font-medium">{st.label}</span>
+                  <span className="block text-[11px] leading-tight opacity-80">{st.hint}</span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
           <Panel title="Map elements">
             <div className="space-y-2">
               {FURNITURE_TOGGLES.map((t) => (
@@ -164,7 +192,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-muted">
-                {revisionsUsed === 0 ? "1 free revision included" : `${revisionsUsed} revision${revisionsUsed > 1 ? "s" : ""} used`}
+                {revisionsUsed === 0 ? `Up to ${CHANGES_PER_MAP} changes per map` : `${revisionsUsed} of ${CHANGES_PER_MAP} changes used`}
               </span>
               <Button variant="secondary" size="sm" onClick={applyRevision} disabled={busy || !revision.trim()}>
                 {busy ? "Working…" : "Apply"}
@@ -176,15 +204,18 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <Button onClick={onBack} variant="ghost">← Back</Button>
-        <div className="flex items-center gap-3">
-          <Button onClick={downloadSvg} variant="secondary">Download SVG</Button>
-          <Button onClick={paymentEnabled ? onPay : exportPdf} size="lg" disabled={busy || exporting}>
-            {paymentEnabled
-              ? "Looks good — get my PDF ($5)"
-              : exporting
-                ? "Preparing PDF…"
-                : "Looks good — download my PDF"}
-          </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-3">
+            <Button onClick={downloadSvg} variant="secondary" disabled={!geo}>
+              SVG for designers
+            </Button>
+            <Button onClick={exportPdf} size="lg" disabled={busy || exporting || !geo}>
+              {exporting ? "Preparing PDF…" : "Download PDF"}
+            </Button>
+          </div>
+          <span className="text-xs text-muted">
+            Vector PDF for print, no watermark{saved ? " · saved to My maps" : ""}
+          </span>
         </div>
       </div>
 
@@ -195,10 +226,48 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onPay,
           aria-hidden
           style={{ position: "fixed", left: -99999, top: 0, opacity: 0, pointerEvents: "none" }}
         >
-          <CartoMap spec={spec} data={data} geo={geo} width={pdf.w} height={pdf.h} forPdf />
+          <CartoMap spec={spec} data={data} geo={geo} subdivisions={subdivisions} width={pdf.w} height={pdf.h} forPdf />
         </div>
       )}
     </div>
+  );
+}
+
+const SOURCE: Record<Decision["by"], { label: string; cls: string }> = {
+  brief: { label: "Your brief", cls: "bg-atlas-sage/60 text-atlas-forest" },
+  data: { label: "Your data", cls: "bg-atlas-green/25 text-atlas-ink" },
+  rules: { label: "Rulebook", cls: "bg-atlas-card text-atlas-ink-2 border border-line" },
+  ai: { label: "AI cartographer", cls: "bg-atlas-ochre/25 text-atlas-ink" },
+  check: { label: "Corrected", cls: "bg-amber-100 text-amber-900" },
+};
+
+/** The engine's reasoning, rule by rule — and anything its checks corrected. */
+function DecisionLog({ decisions }: { decisions: Decision[] }) {
+  const corrected = decisions.filter((d) => d.by === "check").length;
+  return (
+    <details className="mt-4 rounded-lg border border-line bg-paper px-4 py-3 text-sm" open>
+      <summary className="cursor-pointer font-medium text-ink">
+        How this map was decided
+        <span className="ml-2 font-normal text-muted">
+          {decisions.length} decisions{corrected ? ` · ${corrected} corrected by the checks` : " · all checks passed"}
+        </span>
+      </summary>
+      <ol className="mt-3 divide-y divide-line">
+        {decisions.map((d, i) => (
+          <li key={i} className="grid grid-cols-[auto_1fr] gap-x-3 py-2.5">
+            <span className="pt-0.5 font-mono text-[11px] text-muted">{d.rule}</span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">{d.topic}:</span>
+                <span className="text-ink">{d.choice}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${SOURCE[d.by].cls}`}>{SOURCE[d.by].label}</span>
+              </div>
+              <p className="mt-0.5 leading-relaxed text-muted">{d.because}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

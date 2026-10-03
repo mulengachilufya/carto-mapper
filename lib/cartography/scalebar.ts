@@ -10,18 +10,15 @@ export interface ScaleBar {
 const EARTH_RADIUS_KM = 6371;
 
 /**
- * A real scale bar: measure ground distance across the map centre, pick a nice
+ * A real scale bar: measure ground distance across the given map centre, pick a nice
  * round number (1·2·5 × 10ⁿ) that fits in ~targetPx, and return its pixel width.
  */
 export function computeScaleBar(
   projection: GeoProjection,
-  width: number,
-  height: number,
+  [cx, cy]: [number, number],
   targetPx = 150,
 ): ScaleBar | null {
   if (!projection.invert) return null;
-  const cx = width / 2;
-  const cy = height / 2;
   const a = projection.invert([cx, cy]);
   const b = projection.invert([cx + 60, cy]);
   if (!a || !b) return null;
@@ -31,6 +28,7 @@ export function computeScaleBar(
   if (!Number.isFinite(kmPerPx) || kmPerPx <= 0) return null;
 
   const nice = niceRound(kmPerPx * targetPx);
+  if (!(nice > 0)) return null;
   const widthPx = nice / kmPerPx;
   if (!Number.isFinite(widthPx) || widthPx <= 0) return null;
 

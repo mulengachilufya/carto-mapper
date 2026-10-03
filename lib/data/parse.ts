@@ -79,13 +79,26 @@ function values(rows: Row[], col: string): Cell[] {
   return rows.map((r) => r[col]).filter((v) => v !== null && v !== "" && v !== undefined);
 }
 
-function asNumber(v: Cell): number | null {
+/**
+ * Read a number the way a person writes it: "1,200", "1 200", "12%", "$3.4m",
+ * "4.5k", "€ 90", "(1,234)" for negatives. Returns null for anything else.
+ */
+export function asNumber(v: Cell | undefined): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string") {
-    const n = Number(v.replace(/[, ]/g, ""));
-    return Number.isFinite(n) ? n : null;
+  if (typeof v !== "string") return null;
+  let s = v.trim();
+  if (!s) return null;
+  let sign = 1;
+  if (/^\(.*\)$/.test(s)) {
+    sign = -1;
+    s = s.slice(1, -1);
   }
-  return null;
+  s = s.replace(/[$€£¥₹₦₵₱₩]|\b(?:usd|eur|gbp|zmw|kes|ngn|ksh|r)\b/gi, "").replace(/%$/, "").replace(/[\s,\u00a0\u202f']/g, "");
+  const m = s.match(/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)(k|m|mn|bn|b)?$/i);
+  if (!m) return null;
+  const mult = { k: 1e3, m: 1e6, mn: 1e6, b: 1e9, bn: 1e9 }[(m[2] ?? "").toLowerCase() as "k"] ?? 1;
+  const n = Number(m[1]) * mult * sign;
+  return Number.isFinite(n) ? n : null;
 }
 
 function numericShare(rows: Row[], col: string): number {

@@ -1,7 +1,7 @@
 # CartoMapper
 
 Generate **publication-quality, print-ready cartographic maps** (300 DPI PDF) from your
-data in about a minute — for $5 a map. The whole point: every output looks like a
+data in about a minute — free for everyone (sign up, then up to 10 new maps a day). The whole point: every output looks like a
 professional human cartographer made it, not AI clip-art.
 
 > New here? Read **[SETUP.md](SETUP.md)** to run it and go live, and **[PROGRESS.md](PROGRESS.md)**
@@ -15,8 +15,8 @@ npm run dev
 ```
 
 Open http://localhost:3000. The create flow and map preview work with **no keys** (the map
-spec uses the built-in cartographic rules engine). Payment, saving, and AI-tailored specs
-need keys — see [SETUP.md](SETUP.md).
+spec uses the built-in cartographic rules engine). Accounts, saving, the daily limit and
+the AI cartographer need keys — see [SETUP.md](SETUP.md).
 
 `sample-map.pdf` in this folder is a real export from the engine — open it to see the output.
 
@@ -24,7 +24,7 @@ need keys — see [SETUP.md](SETUP.md).
 
 Pick an industry → answer 5 quick questions (+ optional plain-English "vibe") → upload a
 CSV/Excel, paste a table, or generate a sample → preview a live map → tweak the furniture →
-pay $5 → download a 300 DPI PDF.
+download a print-ready PDF and SVG, saved to "My maps".
 
 ## Tech
 
@@ -32,9 +32,8 @@ pay $5 → download a 300 DPI PDF.
 - **D3** (`d3-geo`, `d3-scale`, `d3-scale-chromatic`) + **TopoJSON** + Natural Earth geodata
 - **Map intelligence:** Anthropic **Claude** (`claude-sonnet-4-6`) with a deterministic
   cartographic **rules-engine fallback** (works with no key)
-- **Firebase** (Firestore + Storage) — optional persistence (planned); the app runs without any database
-- **Stripe** Checkout ($5 one-time)
-- **PDF export:** headless-Chrome (Puppeteer) today; moving to client-side `jsPDF` + `svg2pdf` for Netlify
+- **Supabase** — accounts (email + password), saved maps and the 10-maps-a-day limit
+- **PDF export:** client-side `jsPDF` + `svg2pdf`
 - **Netlify** for hosting
 
 ## The cartography (why it looks right)
@@ -56,8 +55,8 @@ SVG, so the same component renders in the browser preview and server-side for th
 ```
 app/                     routes (landing, /create, /download) + API routes
   api/generate-spec      industry+data → MapSpec (Claude or rules engine)
-  api/generate-pdf       server-render the map → Puppeteer → PDF
-  api/stripe/*           checkout + webhook
+  api/job, api/me        saved maps, who's signed in + today's usage
+  signup, login, …       accounts (Supabase Auth); proxy.ts gates /create, /download, /account
 components/
   cartography/CartoMap   the map renderer (D3 math + React SVG)
   create/                the guided wizard (industry → questions → data → preview)
@@ -68,5 +67,5 @@ lib/
   data/                  CSV/Excel/paste parsing, column inference, sample generation
   industries.ts          24 industries × 5 controlled questions
 public/geodata/          Natural Earth countries (TopoJSON)
-supabase/schema.sql      database + storage bucket
+supabase/schema.sql      profiles + map_jobs (run in a new Supabase project)
 ```

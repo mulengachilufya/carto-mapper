@@ -8,8 +8,10 @@ export default function CreatePage() {
   return (
     <>
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 lg:py-14">
-        <CreateWizard />
+      <main className="atlas-grain flex-1 bg-atlas-paper">
+        <div className="mx-auto w-full max-w-6xl px-5 py-10 lg:px-8 lg:py-14">
+          <CreateWizard />
+        </div>
       </main>
       <Footer />
     </>

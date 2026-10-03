@@ -7,9 +7,12 @@ import { BriefStep, type ContextFile } from "./BriefStep";
 import { MapTypeStep } from "./MapTypeStep";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
-import { getSessionId } from "@/lib/session";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
-import type { MapSpec } from "@/lib/mapspec/schema";
+import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
+import { resolvePlaces, type Resolution } from "@/lib/data/resolve";
+import type { Usage } from "@/lib/quota";
+import { readBrief } from "@/lib/engine/brief";
+import { illustrativeData } from "@/lib/data/illustrative";
 
 interface Brand {
   title: string;
@@ -18,8 +21,13 @@ interface Brand {
   notes: string;
 }
 
-function recommendType(roles: ColumnRoles | null, prompt: string): string {
+function recommendType(roles: ColumnRoles | null, prompt: string, resolution: Resolution | null): string {
   const p = prompt.toLowerCase();
+  // Region names (countries, provinces, districts) → shade them; sites → mark them.
+  const kind = resolution?.reading.kind;
+  if (kind === "countries" || kind === "provinces" || kind === "districts") {
+    return roles?.valueField ? "choropleth" : "footprint";
+  }
   if (roles?.latField && roles?.lonField) {
     if (roles.categoryField) return "categorical_point";
     if (roles.valueField) return "proportional_symbol";
@@ -27,17 +35,13 @@ function recommendType(roles: ColumnRoles | null, prompt: string): string {
   }
   if (roles?.nameField && roles?.valueField) return "choropleth";
   if (roles?.nameField) return "footprint";
+  // No data: follow the engine's reading of the sentence.
+  const b = readBrief(prompt);
+  if (b.intent === "footprint") return "footprint";
+  if (b.intent === "locations") return "point";
+  if (b.intent === "thematic") return b.place?.kind === "country" && !b.units ? "proportional_symbol" : "choropleth";
   if (/where we work|footprint|presence|reach|member states|countries we/.test(p)) return "footprint";
-  if (/site|location|clinic|office|borehole|facility|where are/.test(p)) return "point";
-  return "choropleth";
-}
-
-function titleFromPrompt(p: string): string {
-  const s = p.trim().replace(/\s+/g, " ");
-  if (!s) return "Untitled Map";
-  const first = s.split(/[.!?\n]/)[0];
-  const words = first.split(" ").slice(0, 8).join(" ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return "reference";
 }
 
 export function CreateWizard() {
@@ -48,8 +52,14 @@ export function CreateWizard() {
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [roles, setRoles] = useState<ColumnRoles | null>(null);
   const [mapType, setMapType] = useState<string | null>(null);
+  // Only a type the user actually picked binds the engine; the recommendation doesn't.
+  const [typeLocked, setTypeLocked] = useState(false);
+  // Sample values the engine asked for when the brief described data it didn't include.
+  const [sample, setSample] = useState<{ table: ParsedTable; roles: ColumnRoles } | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
   const [files, setFiles] = useState<ContextFile[]>([]);
+  // Where the data says the map is (e.g. "the counties of Kenya"), found by the resolver.
+  const [resolution, setResolution] = useState<Resolution | null>(null);
   const [extracting, setExtracting] = useState(false);
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
@@ -57,17 +67,27 @@ export function CreateWizard() {
   const [generating, setGenerating] = useState(false);
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [creditedBanner, setCreditedBanner] = useState(false);
+  // Today's free maps, from the server (null when accounts are off).
+  const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("credited") === "1") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time init from the URL on mount
-      setCreditedBanner(true);
-    }
+    let alive = true;
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((m: { usage?: Usage | null }) => alive && setUsage(m.usage ?? null))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const paymentEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-  const recommended = recommendType(roles, prompt);
+  const atLimit = Boolean(usage && usage.remaining <= 0 && !jobId);
+
+  const recommended = recommendType(roles, prompt, resolution);
+  const rows = table?.rows ?? sample?.table.rows ?? [];
+  const geography: { level: GeoLevel; region?: string } | undefined = resolution
+    ? { level: resolution.level, region: resolution.region }
+    : undefined;
 
   async function generate(opts?: { previousSpec?: MapSpec; revisionRequest?: string }) {
     setGenerating(true);
@@ -82,23 +102,48 @@ export function CreateWizard() {
           table,
           roles,
           mapType,
+          mapTypeLocked: typeLocked,
+          geography,
           title: brand.title || undefined,
           branding: {
             organisation: brand.organisation || undefined,
             logoDataUrl: brand.logoDataUrl || undefined,
             notes: brand.notes || undefined,
           },
-          sessionId: getSessionId(),
           jobId,
           previousSpec: opts?.previousSpec,
           revisionRequest: opts?.revisionRequest,
           revisionCount: opts?.revisionRequest ? revisionsUsed + 1 : revisionsUsed,
         }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (json.usage) setUsage(json.usage as Usage);
+      if (res.status === 401) {
+        window.location.assign(`/signup?next=${encodeURIComponent("/create")}`);
+        return;
+      }
+      if (res.status === 429) {
+        setError(String(json.message ?? "You've reached today's limit."));
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setSpec(json.spec as MapSpec);
-      if (json.jobId) setJobId(json.jobId);
+      let next = json.spec as MapSpec;
+      if (!opts?.previousSpec) {
+        // Data the brief itself implied (a list of countries), or illustrative values.
+        let s2: { table: ParsedTable; roles: ColumnRoles } | null = null;
+        if (!table && Array.isArray(json.rows) && json.rows.length) {
+          s2 = { table: { columns: Object.keys(json.rows[0]), rows: json.rows, rowCount: json.rows.length }, roles: { nameField: next.data.nameField } };
+        } else if (!table && next.data.illustrative && geo) {
+          const ill = await illustrativeData(next, geo).catch(() => null);
+          if (ill) {
+            s2 = { table: ill.table, roles: ill.roles };
+            next = ill.spec;
+          }
+        }
+        setSample(s2);
+      }
+      setSpec(next);
+      setJobId(json.jobId ?? jobId ?? null);
       if (opts?.revisionRequest) setRevisionsUsed((n) => n + 1);
       setStep(3);
     } catch {
@@ -113,47 +158,22 @@ export function CreateWizard() {
     try {
       sessionStorage.setItem(
         "cartomapper:lastMap",
-        JSON.stringify({ spec, data: table?.rows ?? [], title: spec.title, jobId }),
+        JSON.stringify({ spec, data: rows, title: spec.title, jobId }),
       );
     } catch {
       /* ignore */
     }
   }
 
-  async function handleCheckout() {
-    if (!spec) return;
+  /** Downloaded: keep the saved copy identical to the file (style, elements, page). */
+  function handleDownloaded() {
     stash();
-    const sessionId = getSessionId();
-    try {
-      // A pack credit on this session? Spend it and skip Stripe entirely.
-      const creditRes = await fetch(`/api/credits?sessionId=${encodeURIComponent(sessionId)}`);
-      const creditJson = (await creditRes.json()) as { remaining?: number };
-      if (jobId && (creditJson.remaining ?? 0) > 0) {
-        const consumeRes = await fetch("/api/credits/consume", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, jobId }),
-        });
-        if (consumeRes.ok) {
-          window.location.assign(`/download?job=${encodeURIComponent(jobId)}&paid=1`);
-          return;
-        }
-        // Fall through to normal checkout if the credit spend lost a race.
-      }
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
+    if (spec && jobId) {
+      fetch("/api/job", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, sessionId, title: spec.title }),
-      });
-      const json = await res.json();
-      if (json.url) {
-        window.location.assign(json.url);
-        return;
-      }
-      throw new Error(json.error ?? "no checkout url");
-    } catch {
-      setError("Couldn't start checkout — check the Stripe keys in your environment.");
+        body: JSON.stringify({ jobId, spec }),
+      }).catch(() => {});
     }
   }
 
@@ -172,10 +192,15 @@ export function CreateWizard() {
         if (res.ok) {
           const ex = await res.json();
           if (ex.table && ex.roles) {
-            setTable(ex.table as ParsedTable);
-            setRoles(ex.roles as ColumnRoles);
+            // Run what the AI read through the same place resolver as pasted data:
+            // geocode the towns and find the geography (e.g. the districts of Uganda).
+            const res2 = geo
+              ? await resolvePlaces(ex.table as ParsedTable, ex.roles as ColumnRoles, { geo, prompt }).catch(() => null)
+              : null;
+            setTable(res2?.table ?? (ex.table as ParsedTable));
+            setRoles(res2?.roles ?? (ex.roles as ColumnRoles));
+            setResolution(res2);
           }
-          if (ex.title) setBrand((b) => (b.title ? b : { ...b, title: String(ex.title) }));
           if (ex.mapType) setMapType((t) => t ?? String(ex.mapType));
         }
       } catch {
@@ -184,7 +209,6 @@ export function CreateWizard() {
         setExtracting(false);
       }
     }
-    setBrand((b) => (b.title ? b : { ...b, title: titleFromPrompt(prompt) }));
     setMapType((t) => t ?? recommended);
     setStep(1);
   }
@@ -193,9 +217,22 @@ export function CreateWizard() {
     <div>
       <Stepper step={step} />
 
-      {creditedBanner && (
-        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent-2">
-          Pack purchased — your credits are ready. Build a map below and checkout will skip straight to download.
+      {usage && (
+        <p className="mx-auto mt-5 flex max-w-2xl items-center justify-center gap-2 text-center text-sm text-muted">
+          <span className="font-mono text-xs">
+            {usage.used}/{usage.limit}
+          </span>
+          free maps used today · changes and downloads don&apos;t count ·{" "}
+          <a href="/account" className="underline hover:text-ink">
+            My maps
+          </a>
+        </p>
+      )}
+
+      {atLimit && !error && (
+        <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          You&apos;ve made your {usage?.limit} free maps for today. A new one frees up 24 hours after each map — meanwhile you
+          can open, change and download the maps you&apos;ve made from <a href="/account" className="underline">My maps</a>.
         </p>
       )}
 
@@ -214,9 +251,10 @@ export function CreateWizard() {
             roles={roles}
             files={files}
             onPromptChange={setPrompt}
-            onData={(t, r) => {
+            onData={(t, r, res) => {
               setTable(t);
               setRoles(r);
+              setResolution(res);
             }}
             onFilesChange={setFiles}
             onNext={startMapType}
@@ -229,7 +267,10 @@ export function CreateWizard() {
             geo={geo}
             selected={mapType}
             recommended={recommended}
-            onSelect={setMapType}
+            onSelect={(t) => {
+              setMapType(t);
+              setTypeLocked(t !== recommended);
+            }}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />
@@ -252,14 +293,14 @@ export function CreateWizard() {
           <PreviewStep
             geo={geo}
             spec={spec}
-            data={table?.rows ?? []}
+            data={rows}
             setSpec={setSpec}
             onRevise={(text) => generate({ previousSpec: spec, revisionRequest: text })}
             onBack={() => setStep(2)}
-            onPay={handleCheckout}
+            onDownloaded={handleDownloaded}
             revisionsUsed={revisionsUsed}
             busy={generating}
-            paymentEnabled={paymentEnabled}
+            saved={Boolean(jobId)}
           />
         )}
       </div>
