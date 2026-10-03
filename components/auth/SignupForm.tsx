@@ -94,7 +94,7 @@ export function SignupForm() {
       <SubmitButton busy={busy}>{busy ? "Creating your account…" : "Create free account"}</SubmitButton>
       <p className="text-center text-xs text-atlas-ink-2/80">
         Free forever: up to 10 new maps a day. By signing up you agree to use CartoMapper fairly.{" "}
-        <Link href="/#faq" className="underline">
+        <Link href="/how-it-works#faq" className="underline">
           Questions?
         </Link>
       </p>

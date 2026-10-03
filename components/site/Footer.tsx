@@ -7,15 +7,15 @@ const COLUMNS = [
     links: [
       { href: "/create", label: "Make a map" },
       { href: "/atlas", label: "The Atlas" },
-      { href: "/#styles", label: "Map styles" },
+      { href: "/how-it-works#styles", label: "Map styles" },
     ],
   },
   {
     title: "Learn",
     links: [
-      { href: "/#how", label: "How it works" },
-      { href: "/#who", label: "Who it's for" },
-      { href: "/#faq", label: "Questions" },
+      { href: "/how-it-works", label: "How it works" },
+      { href: "/how-it-works#who", label: "Who it's for" },
+      { href: "/how-it-works#faq", label: "Questions" },
     ],
   },
   {
