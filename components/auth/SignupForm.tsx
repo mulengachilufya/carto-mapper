@@ -16,7 +16,6 @@ export function SignupForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
 
   if (!browserSupabase) return <AccountsOff />;
   const supabase = browserSupabase;
@@ -31,52 +30,24 @@ export function SignupForm() {
 
     setBusy(true);
     const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
-    const { data, error: err } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
-          country,
-          role,
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
+    // The account is created confirmed on the server: no email to wait for.
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName, lastName, country, role, email, password }),
+    }).catch(() => null);
+    const json = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+    if (!res?.ok) {
+      setBusy(false);
+      return setError(json?.error ?? "We couldn't create your account just now. Please try again.");
+    }
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (err) {
       setBusy(false);
-      return setError(/already registered|already exists/i.test(err.message) ? "That email already has an account — sign in instead." : err.message);
+      return setError("Your account is ready, but signing in failed. Please sign in.");
     }
-    // Email confirmation off: signed in now. On: they confirm from their inbox first.
-    if (data.session) {
-      // Signed in straight away (email confirmation off): send the welcome email, then go.
-      await fetch("/api/account/welcome", { method: "POST" }).catch(() => {});
-      window.location.assign(next);
-    }
-    else {
-      setSentTo(email.trim());
-      setBusy(false);
-    }
-  }
-
-  if (sentTo) {
-    return (
-      <div className="space-y-4">
-        <FormMessage tone="ok">
-          Almost there — we sent a confirmation link to <strong>{sentTo}</strong>. Open it on this device and you&apos;ll go
-          straight to making your map.
-        </FormMessage>
-        <p className="text-sm text-atlas-ink-2">
-          Nothing arrived after a minute? Check spam, or{" "}
-          <button type="button" className="underline" onClick={() => setSentTo(null)}>
-            try another email
-          </button>
-          .
-        </p>
-      </div>
-    );
+    await fetch("/api/account/welcome", { method: "POST" }).catch(() => {});
+    window.location.assign(next);
   }
 
   return (

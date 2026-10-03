@@ -7,8 +7,8 @@ import { safeNextPath } from "@/lib/safe-redirect";
 import { AccountsOff, Field, FormMessage, SubmitButton, fieldClass } from "./AuthShell";
 
 const LINK_ERRORS: Record<string, string> = {
-  expired_link: "That link has expired or was already used. Sign in, or ask for a new one.",
-  missing_code: "That link was incomplete. Sign in, or ask for a new one.",
+  expired_link: "That link has expired or was already used. Just sign in below.",
+  missing_code: "That link was incomplete. Just sign in below.",
 };
 
 export function LoginForm() {
@@ -16,8 +16,6 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [unconfirmed, setUnconfirmed] = useState(false);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("error");
@@ -31,33 +29,25 @@ export function LoginForm() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setInfo(null);
-    setUnconfirmed(false);
     setBusy(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const creds = { email: email.trim(), password };
+    let { error: err } = await supabase.auth.signInWithPassword(creds);
+    // Accounts made while email confirmation was on: confirm on the right password, then sign in.
+    if (err && /not confirmed/i.test(err.message)) {
+      const ok = await fetch("/api/auth/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      })
+        .then((r) => r.ok)
+        .catch(() => false);
+      if (ok) ({ error: err } = await supabase.auth.signInWithPassword(creds));
+    }
     if (err) {
       setBusy(false);
-      if (/not confirmed/i.test(err.message)) {
-        setUnconfirmed(true);
-        return setError("Please confirm your email first — the link is in your inbox.");
-      }
-      return setError(/invalid login/i.test(err.message) ? "That email and password don't match an account." : err.message);
+      return setError(/invalid login|invalid credentials/i.test(err.message) ? "That email and password don't match an account." : err.message);
     }
     window.location.assign(safeNextPath(new URLSearchParams(window.location.search).get("next")));
-  }
-
-  async function resend() {
-    const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
-    const { error: err } = await supabase.auth.resend({
-      type: "signup",
-      email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    });
-    if (err) setError(err.message);
-    else {
-      setError(null);
-      setInfo(`A new confirmation link is on its way to ${email.trim()}.`);
-    }
   }
 
   return (
@@ -73,17 +63,7 @@ export function LoginForm() {
           Forgot your password?
         </Link>
       </div>
-      {error && (
-        <FormMessage tone="error">
-          {error}{" "}
-          {unconfirmed && email && (
-            <button type="button" onClick={resend} className="font-medium underline">
-              Send it again
-            </button>
-          )}
-        </FormMessage>
-      )}
-      {info && <FormMessage tone="ok">{info}</FormMessage>}
+      {error && <FormMessage tone="error">{error}</FormMessage>}
       <SubmitButton busy={busy}>{busy ? "Signing in…" : "Sign in"}</SubmitButton>
     </form>
   );
