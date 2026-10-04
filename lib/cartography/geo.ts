@@ -215,6 +215,16 @@ export const CONTINENT_BBOX: Record<string, [number, number, number, number]> = 
   "southern africa": [11, -35, 41, -8],
   "central africa": [8, -14, 34, 24],
   "latin america": [-118, -56, -34, 33],
+  "central america": [-93, 6, -77, 19],
+  caribbean: [-86, 9, -59, 27],
+  nordics: [-25, 54, 32, 72],
+  "western europe": [-11, 42, 17, 60],
+  "eastern europe": [12, 41, 41, 60],
+  balkans: [13, 39, 30, 47],
+  "southeast asia": [92, -11, 142, 29],
+  "south asia": [60, 5, 98, 38],
+  "east asia": [73, 18, 146, 54],
+  "central asia": [46, 35, 88, 56],
 };
 
 export function continentBBoxPolygon(name: string): Feature<Polygon> | null {

@@ -880,6 +880,8 @@ const REF_PASTELS = ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"];
 function unitName(name: string | undefined): string {
   return String(name ?? "")
     .replace(/\s+(province|region|district|state|county|governorate|prefecture|department|oblast|municipality)$/i, "")
+    // "Département de l'Ouest" → "Ouest", "Provincia de Buenos Aires" → "Buenos Aires".
+    .replace(/^(?:département|departamento|provincia|province|région|región)\s+(?:de la |de l'|du |des |de |d')?/i, "")
     .trim();
 }
 
