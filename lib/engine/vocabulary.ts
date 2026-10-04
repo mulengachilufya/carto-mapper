@@ -119,7 +119,10 @@ export const COLOUR_WORDS: { re: RegExp; palette: string }[] = [
 
 /** Look words → a base-map style. */
 export const STYLE_WORDS: { re: RegExp; style: MapStyle }[] = [
-  { re: /\bminimal\b|\bclean\b|\bsimple\b|\bplain\b|\bmonochrome\b|\bacademic\b|\bjournal\b/, style: "minimal" },
+  { re: /\bnight\b|\bdark\b|\bneon\b|\bglow\w*\b|\bblack background\b/, style: "night" },
+  { re: /\bdot[- ]?matrix\b|\bdotted\b|\bhalftone\b|\bpixel\w*\b/, style: "dots" },
+  { re: /\beditorial\b|\bmagazine\b|\bnewspaper\b|\bnewsroom\b|\binfographic\b|\bflat\b|\bmodern\b|\bclean\b|\bsimple\b/, style: "editorial" },
+  { re: /\bminimal\b|\bplain\b|\bmonochrome\b|\bacademic\b|\bjournal\b/, style: "minimal" },
   { re: /\bpolitical\b|\bpastel\b|\bclassic\b|\badministrative\b/, style: "classic" },
   { re: /\bphysical\b|\bterrain\b|\brelief\b|\btopograph\w*\b|\bschool atlas\b|\batlas\b|\bnatural\b/, style: "atlas" },
 ];

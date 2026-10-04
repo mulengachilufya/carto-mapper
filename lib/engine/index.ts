@@ -53,7 +53,7 @@ export function finalize(
       title: Boolean(facts.userTitle) || /title|call it|name it/.test(r),
       orientation: /portrait|landscape/.test(r),
       furniture: /legend|scale|north|grid|graticule|arrow|label|place name/.test(r),
-      style: /atlas|classic|minimal|physical|political/.test(r),
+      style: /atlas|classic|minimal|physical|political|editorial|night|dark|neon|dots|dotted|halftone|magazine/.test(r),
       palette: /colou?r|green|blue|red|purple|orange|grey|gray|brown|pink|teal/.test(r),
     },
   });

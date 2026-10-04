@@ -1,11 +1,10 @@
-import Image from "next/image";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { AtlasGallery } from "@/components/marketing/AtlasGallery";
 
 export const metadata = {
-  title: "The Atlas — CartoMapper",
-  description: "Specimen plates drawn live by the CartoMapper engine: relief, rivers, provinces and districts, across every continent.",
+  title: "Gallery — CartoMapper",
+  description: "Maps drawn live by the CartoMapper engine for finance, retail, health, tourism, energy and more: editorial, night, dot-matrix and atlas styles.",
 };
 
 export default function AtlasPage() {
@@ -13,21 +12,21 @@ export default function AtlasPage() {
     <>
       <Header />
       <main className="flex-1">
-        <section className="relative overflow-hidden bg-atlas-pine text-atlas-paper">
-          <Image src="/media/figure-09.jpg" alt="" fill preload sizes="100vw" className="object-cover opacity-45" />
-          <div className="absolute inset-0 bg-gradient-to-r from-atlas-pine via-atlas-pine/70 to-transparent" />
+        <section className="relative overflow-hidden bg-[#0b1412] text-atlas-paper">
+          <div className="pointer-events-none absolute -right-40 -top-40 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,rgba(232,184,106,.22),transparent)]" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-52 left-10 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,rgba(93,255,168,.12),transparent)]" aria-hidden />
           <div className="relative mx-auto max-w-7xl px-5 py-24 lg:px-8 lg:py-32">
-            <p className="eyebrow text-atlas-ochre">The Atlas</p>
-            <h1 className="display mt-4 max-w-3xl text-5xl font-semibold leading-[1.02] sm:text-7xl">
-              Plates from <em className="font-normal text-atlas-sage">every corner</em> of the Earth.
+            <p className="eyebrow text-atlas-ochre">The gallery</p>
+            <h1 className="display mt-4 max-w-4xl text-5xl font-medium leading-[0.98] tracking-tight sm:text-7xl">
+              Every one of these took <em className="font-normal text-atlas-ochre">one sentence.</em>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg text-atlas-paper/75">
-              Each plate is rendered live in your browser by the engine that will draw your map — terrain fetched,
-              rivers traced, names placed as you scroll. Data on these plates is illustrative.
+            <p className="mt-6 max-w-2xl text-lg text-atlas-paper/70">
+              Each map is drawn live in your browser by the engine that will draw yours, from the sentence printed under it.
+              Numbers are illustrative; the looks are real.
             </p>
           </div>
         </section>
-        <section className="atlas-grain bg-atlas-paper py-20 lg:py-28">
+        <section className="bg-atlas-card py-20 lg:py-28">
           <div className="mx-auto max-w-7xl px-5 lg:px-8">
             <AtlasGallery />
           </div>

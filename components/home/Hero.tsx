@@ -2,10 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 const PROOF = [
+  ["6 looks", "editorial, night, dot-matrix and more"],
   ["199", "countries, down to provinces & districts"],
-  ["7,342", "cities & towns placed and named"],
-  ["30 m", "terrain relief, land and sea floor"],
-  ["< 3 min", "from a sentence to a print-ready PDF"],
+  ["Any data", "spreadsheets, reports, lists of places"],
+  ["< 3 min", "from a sentence to a print-ready file"],
 ];
 
 /** The first screen: one line of promise and the button, over the Earth at night. */
@@ -17,14 +17,14 @@ export function Hero() {
 
       <div className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-5 py-16 text-center">
         <p className="eyebrow inline-flex items-center gap-2 text-atlas-ochre">
-          <span className="h-1.5 w-1.5 rounded-full bg-atlas-ochre" /> The atlas, on demand
+          <span className="h-1.5 w-1.5 rounded-full bg-atlas-ochre" /> Maps, on demand
         </p>
         <h1 className="display mt-5 text-[2.7rem] font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
           Put your world <em className="font-normal text-atlas-sage">on the map.</em>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-atlas-paper/80">
-          Any place on Earth, any data. Describe it in a sentence and get an atlas-grade, print-ready map in three
-          minutes — real terrain, rivers, place names and a legend that means something.
+          Any place on Earth, any data. Describe it in a sentence and get a map worth sharing in three minutes: bold,
+          clean, on-brand, ready for the deck, the report or the feed.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <Link
@@ -37,7 +37,7 @@ export function Hero() {
             href="/atlas"
             className="inline-flex h-14 items-center rounded-full border border-atlas-paper/30 px-8 text-base text-atlas-paper transition-colors hover:bg-atlas-paper/10"
           >
-            See example maps
+            See the gallery
           </Link>
         </div>
         <p className="mt-4 text-sm text-atlas-paper/60">Free for everyone · up to 10 maps a day · no card</p>

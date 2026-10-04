@@ -130,19 +130,23 @@ export function design(f: Facts): Design {
 
   // ── S. Style: what you asked for, then what the subject and map suit ──
   let style: MapStyle;
+  const LOOK: Record<MapStyle, string> = {
+    editorial: "an editorial, newsroom-graphic look",
+    night: "a dark, glowing look",
+    dots: "a dot-matrix look",
+    atlas: "a physical atlas look",
+    classic: "a political atlas look",
+    minimal: "a minimal paper-and-ink look",
+  };
   if (brief.style) {
     style = brief.style;
-    log("S1", "Style", cap(style), `You asked for a ${brief.style === "atlas" ? "physical" : brief.style === "classic" ? "political" : "minimal"} look.`, "brief");
+    log("S1", "Style", cap(style), `You asked for ${LOOK[style]}.`, "brief");
   } else if (mapType === "reference") {
-    style = level === "world" || level === "continent" ? "classic" : "atlas";
-    log("S2", "Style", cap(style), style === "atlas" ? "A school-atlas plate: terrain relief under softly tinted units, rivers, lakes and towns." : "A political atlas plate: pastel countries with water-lined coasts.", "rules");
-  } else if (mapType === "choropleth") {
-    const many = (f.table?.rows.length ?? 0) > 60;
-    style = level === "admin2" && many ? "minimal" : level === "world" || level === "continent" ? "classic" : "atlas";
-    log("S3", "Style", cap(style), style === "minimal" ? "Many small districts: paper and ink keep the data the only colour on the page." : style === "classic" ? "At world and continent scale the political atlas base frames the colours cleanly." : "Relief shading under the colours keeps the land real without changing the classes.", "rules");
+    style = "editorial";
+    log("S2", "Style", "Editorial", "A clean plate: every unit softly tinted and named, no terrain or rivers competing with the names.", "rules");
   } else {
-    style = "atlas";
-    log("S4", "Style", "Atlas", mapType === "footprint" ? "Highlighted places read best on real terrain, with rivers and towns around them for context." : "Sites read best on real terrain with rivers and towns for orientation.", "rules");
+    style = "editorial";
+    log("S3", "Style", "Editorial", "Flat land and crisp borders keep the data the only thing on the page — no terrain, no rivers.", "rules");
   }
 
   // ── C. Classification: from the numbers themselves ──

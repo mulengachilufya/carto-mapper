@@ -6,7 +6,7 @@ const COLUMNS = [
     title: "Make",
     links: [
       { href: "/create", label: "Make a map" },
-      { href: "/atlas", label: "The Atlas" },
+      { href: "/atlas", label: "Gallery" },
       { href: "/how-it-works#styles", label: "Map styles" },
     ],
   },
@@ -37,8 +37,8 @@ export function Footer() {
           <div>
             <p className="display text-2xl font-semibold">CartoMapper</p>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-atlas-paper/65">
-              Atlas-grade maps of anywhere on Earth, from whatever data you have. Real terrain, rivers, place names and
-              honest cartography — in minutes, not weeks.
+              Maps worth sharing, of anywhere on Earth, from whatever data you have. Bold, honest and on-brand, in
+              minutes, not weeks.
             </p>
           </div>
           <nav className="grid grid-cols-3 gap-6 text-sm">

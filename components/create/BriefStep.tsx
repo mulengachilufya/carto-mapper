@@ -29,9 +29,9 @@ interface Props {
 }
 
 const PROMPT_IDEAS = [
-  "Health facilities across Ghana, sized by patients seen",
-  "Where we work in East Africa, for our annual report",
-  "Poverty rate by state in Nigeria",
+  "Our stores in the United Kingdom, sized by annual sales",
+  "Median home price by state, United States, dark style",
+  "Where we work in Central America, for our annual report",
   "Our coffee cooperatives in the Colombian highlands",
   "Renewable share of electricity for every country",
 ];

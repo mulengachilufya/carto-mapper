@@ -12,6 +12,8 @@ export interface Specimen {
   id: string;
   title: string;
   note: string;
+  /** Poster framing for the showcase: who it's for, the line, and what was typed. */
+  poster: { eyebrow: string; headline: string; em?: string; prompt: string; stat?: [string, string] };
   /** Country whose provinces/districts the plate needs loaded. */
   subdivisionsOf?: string;
   build: (geo: FeatureCollection, subs?: Subdivisions) => { spec: MapSpec; data: Row[] };
@@ -63,147 +65,262 @@ const furniture = (over: Partial<MapSpec["furniture"]> = {}) => ({
   ...over,
 });
 
+/** Broad, believable world pattern for share-of-population data (high in the north, lower in the south). */
+function worldShare(features: Feature[], seed: number) {
+  const r = rng(seed);
+  return features.map((f) => {
+    const [x, y] = geoCentroid(f as Parameters<typeof geoCentroid>[0]);
+    let lo = 55, hi = 80;
+    if (y > 35 && x > -30 && x < 45) [lo, hi] = [84, 99];
+    else if (y > 24 && x < -50) [lo, hi] = [88, 97];
+    else if (x < -30) [lo, hi] = [62, 88];
+    else if (y < 15 && y > -36 && x > -20 && x < 52) [lo, hi] = [15, 50];
+    else if (y > 12 && y < 42 && x >= 35 && x < 60) [lo, hi] = [72, 99];
+    else if (y > 30 && x > 100) [lo, hi] = [78, 97];
+    else if (x > 110 && y < -10) [lo, hi] = [88, 96];
+    else if (x >= 60 && x < 100 && y < 30) [lo, hi] = [35, 62];
+    return Math.round(lo + r() * (hi - lo));
+  });
+}
+
+const bare = (over: Partial<MapSpec["furniture"]> = {}) => furniture({ title: false, source: false, scalebar: false, north_arrow: false, ...over });
+const nameOf = (f: Feature) => (f.properties as { name: string }).name;
+
 export const SPECIMENS: Specimen[] = [
   {
-    id: "peru-stations",
-    title: "Rainfall stations of Peru",
-    note: "Atlas style · proportional symbols over hypsometric relief — the Andes do the storytelling.",
+    id: "world-millionaires",
+    title: "Where the millionaires live",
+    note: "Night style · cities sized by their millionaire population, glowing on a dark world.",
+    poster: { eyebrow: "Finance & wealth", headline: "Where the world's", em: "millionaires live.", prompt: "Millionaires by city, worldwide", stat: ["384,500", "in New York alone"] },
     build: () => ({
-      data: sites(
+      data: (
         [
-          ["Lima", -12.046, -77.043], ["Arequipa", -16.409, -71.537], ["Cusco", -13.532, -71.967], ["Trujillo", -8.111, -79.029],
-          ["Chiclayo", -6.771, -79.841], ["Piura", -5.194, -80.632], ["Iquitos", -3.749, -73.253], ["Huancayo", -12.065, -75.204],
-          ["Puno", -15.84, -70.022], ["Tacna", -18.013, -70.253], ["Cajamarca", -7.164, -78.51], ["Ayacucho", -13.163, -74.224],
-          ["Pucallpa", -8.379, -74.553], ["Puerto Maldonado", -12.593, -69.189], ["Tarapoto", -6.482, -76.365], ["Huaraz", -9.527, -77.528],
-        ],
-        7,
-        120,
-        2400,
-      ),
+          ["New York", 40.71, -74.0, 384500], ["Bay Area", 37.77, -122.42, 342400], ["Tokyo", 35.68, 139.69, 292300], ["Singapore", 1.35, 103.82, 242400],
+          ["London", 51.51, -0.13, 227000], ["Los Angeles", 34.05, -118.24, 212100], ["Paris", 48.86, 2.35, 160100], ["Sydney", -33.87, 151.21, 147000],
+          ["Hong Kong", 22.32, 114.17, 143400], ["Beijing", 39.9, 116.4, 125600], ["Shanghai", 31.23, 121.47, 123400], ["Chicago", 41.88, -87.63, 120500],
+          ["Toronto", 43.65, -79.38, 104000], ["Zurich", 47.37, 8.54, 99300], ["Seoul", 37.57, 126.98, 82800], ["Dubai", 25.2, 55.27, 81200],
+          ["Melbourne", -37.81, 144.96, 64400], ["Mumbai", 19.08, 72.88, 58800], ["São Paulo", -23.55, -46.63, 56400], ["Geneva", 46.2, 6.14, 42000],
+          ["Mexico City", 19.43, -99.13, 31000], ["Miami", 25.76, -80.19, 38000], ["Riyadh", 24.71, 46.68, 21000], ["Johannesburg", -26.2, 28.05, 12000],
+        ] as [string, number, number, number][]
+      ).map(([name, latitude, longitude, value]) => ({ name, latitude, longitude, value })),
       spec: parseMapSpec({
-        title: "Annual Rainfall at Weather Stations, Peru",
-        subtitle: "Millimetres per year · illustrative data",
+        title: "Where the World's Millionaires Live",
+        subtitle: "Resident millionaires by city · illustrative data",
         mapType: "proportional_symbol",
-        style: "atlas",
-        geography: { level: "country", region: "Peru" },
-        data: { nameField: "name", latField: "latitude", lonField: "longitude", valueField: "value", valueLabel: "Rainfall (mm)" },
-        symbology: { palette: "Blues", paletteKind: "sequential", minRadius: 3, maxRadius: 22 },
-        furniture: furniture(),
+        style: "night",
+        geography: { level: "world", region: "World" },
+        data: { nameField: "name", latField: "latitude", lonField: "longitude", valueField: "value", valueLabel: "Millionaires", valueFormat: ",.0f" },
+        symbology: { palette: "YlOrBr", paletteKind: "sequential", minRadius: 3, maxRadius: 26 },
+        furniture: bare({ graticule: false }),
       }),
     }),
   },
   {
-    id: "kenya-counties",
-    title: "Kenya by county",
-    note: "Atlas style · choropleth of all 47 counties, terrain showing through the data colours.",
-    subdivisionsOf: "Kenya",
+    id: "us-home-prices",
+    title: "Home prices by state",
+    note: "Editorial style · flat, bold state choropleth — no terrain, no rivers, just the story.",
+    poster: { eyebrow: "Real estate", headline: "The price map behind", em: "every market report.", prompt: "Median home value by state, United States" },
+    subdivisionsOf: "United States of America",
     build: (_geo, subs) => {
       const feats = subs?.adm1?.features ?? [];
-      const vals = smoothValues(feats, 11, 18, 92);
+      const vals = smoothValues(feats, 5, 165000, 840000);
       return {
-        data: feats.map((f, i) => ({ county: (f.properties as { name: string }).name, coverage: vals[i] / 100 })),
+        data: feats.map((f, i) => ({ state: nameOf(f), value: Math.round(vals[i] / 1000) * 1000 })),
         spec: parseMapSpec({
-          title: "Household Access to Piped Water by County",
-          subtitle: "Kenya · share of households · illustrative data",
+          title: "Median Home Value by State",
+          subtitle: "United States · illustrative data",
           mapType: "choropleth",
-          style: "atlas",
-          geography: { level: "admin1", region: "Kenya" },
-          data: { nameField: "county", valueField: "coverage", valueLabel: "Households with access", valueFormat: ".0%" },
-          symbology: { palette: "YlGnBu", paletteKind: "sequential", classes: 5, classification: "jenks" },
-          furniture: furniture(),
+          style: "editorial",
+          geography: { level: "admin1", region: "United States" },
+          data: { nameField: "state", valueField: "value", valueLabel: "Median home value", valueFormat: "$,.0f" },
+          symbology: { palette: "OrRd", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
         }),
       };
     },
   },
   {
-    id: "east-africa-footprint",
-    title: "Where we work — East Africa",
-    note: "Classic political style · pastel countries, water-lined coasts, rivers and lakes.",
-    build: () => ({
-      data: ["Kenya", "Uganda", "Tanzania", "Rwanda", "Ethiopia", "South Sudan", "Burundi"].map((country) => ({ country })),
-      spec: parseMapSpec({
-        title: "Our Programme Countries",
-        subtitle: "East Africa, 2026",
-        mapType: "footprint",
-        style: "classic",
-        geography: { level: "continent", region: "East Africa" },
-        data: { nameField: "country" },
-        symbology: { palette: "Reds", paletteKind: "sequential" },
-        furniture: furniture({ legend: true, scalebar: true, north_arrow: false, graticule: true }),
-      }),
-    }),
-  },
-  {
-    id: "world-renewables",
-    title: "The world, classic",
-    note: "Classic style · world choropleth on Equal Earth, oceans named like a school atlas.",
+    id: "europe-chargers",
+    title: "EV chargers across Europe",
+    note: "Dots style · a dot-matrix choropleth, every country printed in tiny dots.",
+    poster: { eyebrow: "Energy & EV", headline: "Plugged in,", em: "coast to coast.", prompt: "Fast chargers per 100,000 people by country, Europe" },
     build: (geo) => {
-      const feats = geo.features.filter((f) => (f.properties as { name: string }).name !== "Antarctica");
-      const vals = smoothValues(feats, 3, 2, 96);
+      const feats = geo.features.filter((f) => {
+        const [x, y] = geoCentroid(f as Parameters<typeof geoCentroid>[0]);
+        return x > -25 && x < 40 && y > 35 && y < 71 && !["Russia", "Turkey", "Kazakhstan", "Algeria", "Tunisia", "Morocco", "Libya", "Syria", "Iraq", "Iran", "Israel", "Lebanon", "Jordan", "Palestine", "Cyprus", "N. Cyprus", "Azerbaijan", "Armenia", "Georgia"].includes(nameOf(f));
+      });
+      const vals = smoothValues(feats, 13, 4, 96);
       return {
-        data: feats.map((f, i) => ({ country: (f.properties as { name: string }).name, share: vals[i] / 100 })),
+        data: feats.map((f, i) => ({ country: nameOf(f), value: Math.round(vals[i]) })),
         spec: parseMapSpec({
-          title: "Renewable Share of Electricity Generation",
-          subtitle: "Percent of total generation · illustrative data",
+          title: "Fast Chargers per 100,000 People",
+          subtitle: "Europe · illustrative data",
           mapType: "choropleth",
-          style: "classic",
-          geography: { level: "world", region: "World" },
-          data: { nameField: "country", valueField: "share", valueLabel: "Renewable share", valueFormat: ".0%" },
-          symbology: { palette: "YlGn", paletteKind: "sequential", classes: 5, classification: "quantile" },
-          furniture: furniture({ scalebar: false, north_arrow: false, graticule: true }),
+          style: "dots",
+          geography: { level: "continent", region: "Europe" },
+          data: { nameField: "country", valueField: "value", valueLabel: "Chargers per 100k" },
+          symbology: { palette: "Greens", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
         }),
       };
     },
   },
   {
-    id: "nepal-offices",
-    title: "Nepal and the Himalaya",
-    note: "Atlas style · locator map with peaks, rivers and towns placed without collisions.",
-    build: () => ({
-      data: [
-        ["Kathmandu office", 27.717, 85.324], ["Pokhara", 28.21, 83.985], ["Biratnagar", 26.455, 87.27], ["Nepalgunj", 28.05, 81.617],
-        ["Dhangadhi", 28.683, 80.6], ["Janakpur", 26.729, 85.926], ["Jumla", 29.274, 82.183],
-      ].map(([name, latitude, longitude]) => ({ name, latitude, longitude })),
-      spec: parseMapSpec({
-        title: "Field Offices in Nepal",
-        subtitle: "Mountain health programme",
-        mapType: "point",
-        style: "atlas",
-        geography: { level: "country", region: "Nepal" },
-        data: { nameField: "name", latField: "latitude", lonField: "longitude", valueLabel: "Field office" },
-        symbology: { palette: "Reds", paletteKind: "sequential" },
-        furniture: furniture({ legend: true }),
-      }),
-    }),
-  },
-  {
-    id: "japan-prefectures",
+    id: "japan-visitors",
     title: "Japan by prefecture",
-    note: "Atlas style · portrait page, prefecture choropleth with relief texture.",
+    note: "Night style · prefectures glowing brighter where the visitors went.",
+    poster: { eyebrow: "Tourism & hospitality", headline: "Where the", em: "visitors went.", prompt: "International visitors by prefecture, Japan", stat: ["4.2M", "nights in Tokyo"] },
     subdivisionsOf: "Japan",
     build: (_geo, subs) => {
       const feats = subs?.adm1?.features ?? [];
       const vals = smoothValues(feats, 21, 120, 4200);
       return {
-        data: feats.map((f, i) => ({ prefecture: (f.properties as { name: string }).name, visitors: Math.round(vals[i]) * 1000 })),
+        data: feats.map((f, i) => ({ prefecture: nameOf(f), visitors: Math.round(vals[i]) * 1000 })),
         spec: parseMapSpec({
           title: "International Visitors by Prefecture",
-          subtitle: "Overnight stays, 2025 · illustrative data",
+          subtitle: "Overnight stays · illustrative data",
           mapType: "choropleth",
-          style: "atlas",
+          style: "night",
           page: { size: "A4", orientation: "portrait" },
           geography: { level: "admin1", region: "Japan" },
           data: { nameField: "prefecture", valueField: "visitors", valueLabel: "Overnight stays", valueFormat: ".2s" },
           symbology: { palette: "OrRd", paletteKind: "sequential", classes: 5, classification: "jenks" },
-          furniture: furniture(),
+          furniture: bare(),
+        }),
+      };
+    },
+  },
+  {
+    id: "uk-stores",
+    title: "Stores sized by sales",
+    note: "Editorial style · proportional circles, honest areas, nothing in the way.",
+    poster: { eyebrow: "Retail", headline: "Your store network,", em: "sized by sales.", prompt: "Our stores in the United Kingdom, sized by annual sales" },
+    build: () => ({
+      data: sites(
+        [
+          ["London", 51.507, -0.128], ["Birmingham", 52.486, -1.89], ["Manchester", 53.48, -2.242], ["Leeds", 53.8, -1.549], ["Glasgow", 55.864, -4.252],
+          ["Edinburgh", 55.953, -3.188], ["Bristol", 51.454, -2.588], ["Liverpool", 53.408, -2.991], ["Newcastle", 54.978, -1.617], ["Cardiff", 51.481, -3.179],
+          ["Belfast", 54.597, -5.93], ["Nottingham", 52.954, -1.158], ["Southampton", 50.909, -1.404], ["Norwich", 52.63, 1.297], ["Aberdeen", 57.149, -2.094],
+          ["Plymouth", 50.375, -4.143], ["Cambridge", 52.205, 0.122], ["Brighton", 50.822, -0.137],
+        ],
+        9,
+        8,
+        140,
+      ),
+      spec: parseMapSpec({
+        title: "Annual Sales by Store",
+        subtitle: "United Kingdom · illustrative data",
+        mapType: "proportional_symbol",
+        style: "editorial",
+        geography: { level: "country", region: "United Kingdom" },
+        data: { nameField: "name", latField: "latitude", lonField: "longitude", valueField: "value", valueLabel: "Sales (£ m)" },
+        symbology: { palette: "Reds", paletteKind: "sequential", minRadius: 3, maxRadius: 24 },
+        furniture: bare(),
+      }),
+    }),
+  },
+  {
+    id: "india-coverage",
+    title: "India by state",
+    note: "Editorial style · state choropleth with crisp white borders.",
+    poster: { eyebrow: "Public health", headline: "Target the states", em: "that need it most.", prompt: "Childhood vaccination coverage by state, India" },
+    subdivisionsOf: "India",
+    build: (_geo, subs) => {
+      const feats = subs?.adm1?.features ?? [];
+      const vals = smoothValues(feats, 31, 61, 97);
+      return {
+        data: feats.map((f, i) => ({ state: nameOf(f), value: vals[i] / 100 })),
+        spec: parseMapSpec({
+          title: "Childhood Vaccination Coverage by State",
+          subtitle: "India · illustrative data",
+          mapType: "choropleth",
+          style: "editorial",
+          page: { size: "A4", orientation: "portrait" },
+          geography: { level: "admin1", region: "India" },
+          data: { nameField: "state", valueField: "value", valueLabel: "Coverage", valueFormat: ".0%" },
+          symbology: { palette: "BuGn", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
+        }),
+      };
+    },
+  },
+  {
+    id: "brazil-coffee",
+    title: "Brazil by state",
+    note: "Dots style · production printed as a dot matrix, poster-ready.",
+    poster: { eyebrow: "Agribusiness & trade", headline: "Show buyers", em: "where it's grown.", prompt: "Coffee production by state, Brazil, dotted" },
+    subdivisionsOf: "Brazil",
+    build: (_geo, subs) => {
+      const feats = subs?.adm1?.features ?? [];
+      const vals = smoothValues(feats, 41, 0, 24000);
+      return {
+        data: feats.map((f, i) => ({ state: nameOf(f), value: Math.round(vals[i]) })),
+        spec: parseMapSpec({
+          title: "Coffee Production by State",
+          subtitle: "Brazil · thousand bags · illustrative data",
+          mapType: "choropleth",
+          style: "dots",
+          page: { size: "A4", orientation: "portrait" },
+          geography: { level: "admin1", region: "Brazil" },
+          data: { nameField: "state", valueField: "value", valueLabel: "Thousand bags", valueFormat: ",.0f" },
+          symbology: { palette: "YlOrBr", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
+        }),
+      };
+    },
+  },
+  {
+    id: "world-internet",
+    title: "The world, editorial",
+    note: "Editorial style · world choropleth on Equal Earth — area honest, no Mercator.",
+    poster: { eyebrow: "Global data desks", headline: "The whole world,", em: "honestly projected.", prompt: "Share of people using the internet, every country" },
+    build: (geo) => {
+      const feats = geo.features.filter((f) => nameOf(f) !== "Antarctica");
+      const vals = worldShare(feats, 3);
+      return {
+        data: feats.map((f, i) => ({ country: nameOf(f), share: vals[i] / 100 })),
+        spec: parseMapSpec({
+          title: "Share of People Using the Internet",
+          subtitle: "Percent of population · illustrative data",
+          mapType: "choropleth",
+          style: "editorial",
+          geography: { level: "world", region: "World" },
+          data: { nameField: "country", valueField: "share", valueLabel: "Internet users", valueFormat: ".0%" },
+          symbology: { palette: "PuBu", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
+        }),
+      };
+    },
+  },
+  {
+    id: "canada-fibre",
+    title: "Canada by province",
+    note: "Night style · coverage glowing province by province.",
+    poster: { eyebrow: "Telecoms", headline: "Coverage your", em: "customers can see.", prompt: "Fibre coverage by province, Canada, dark" },
+    subdivisionsOf: "Canada",
+    build: (_geo, subs) => {
+      const feats = subs?.adm1?.features ?? [];
+      const vals = smoothValues(feats, 51, 38, 96);
+      return {
+        data: feats.map((f, i) => ({ province: nameOf(f), value: vals[i] / 100 })),
+        spec: parseMapSpec({
+          title: "Fibre Broadband Coverage by Province",
+          subtitle: "Canada · illustrative data",
+          mapType: "choropleth",
+          style: "night",
+          geography: { level: "admin1", region: "Canada" },
+          data: { nameField: "province", valueField: "value", valueLabel: "Homes passed", valueFormat: ".0%" },
+          symbology: { palette: "PuBu", paletteKind: "sequential", classes: 5, classification: "quantile" },
+          furniture: bare(),
         }),
       };
     },
   },
   {
     id: "france-wine",
-    title: "France, classic",
-    note: "Classic style · categorical points over a political base with rivers.",
+    title: "Wine appellations of France",
+    note: "Editorial style · categorical points, each style its own colour.",
+    poster: { eyebrow: "Wine & spirits", headline: "Every appellation,", em: "one page.", prompt: "Wine appellations in France by style" },
     build: () => ({
       data: [
         ["Bordeaux", 44.838, -0.579, "Red"], ["Saint-Émilion", 44.894, -0.155, "Red"], ["Beaune", 47.025, 4.84, "Red"],
@@ -215,35 +332,51 @@ export const SPECIMENS: Specimen[] = [
         title: "Wine Appellations of France",
         subtitle: "Selected appellations by dominant style",
         mapType: "categorical_point",
-        style: "classic",
+        style: "editorial",
         geography: { level: "country", region: "France" },
         data: { nameField: "name", latField: "latitude", lonField: "longitude", categoryField: "category", valueLabel: "Dominant style" },
         symbology: { palette: "Set2", paletteKind: "qualitative" },
-        furniture: furniture(),
+        furniture: bare(),
       }),
     }),
   },
   {
-    id: "usa-minimal",
-    title: "United States, minimal",
-    note: "Minimal style · state choropleth for reports where the data must be the only colour.",
-    subdivisionsOf: "United States of America",
-    build: (_geo, subs) => {
-      const feats = subs?.adm1?.features ?? [];
-      const vals = smoothValues(feats, 5, 8, 31);
-      return {
-        data: feats.map((f, i) => ({ state: (f.properties as { name: string }).name, rate: vals[i] / 100 })),
-        spec: parseMapSpec({
-          title: "Adults Holding a Bachelor's Degree",
-          subtitle: "Share of population aged 25+ · illustrative data",
-          mapType: "choropleth",
-          style: "minimal",
-          geography: { level: "admin1", region: "United States" },
-          data: { nameField: "state", valueField: "rate", valueLabel: "Share of adults", valueFormat: ".0%" },
-          symbology: { palette: "PuBu", paletteKind: "sequential", classes: 5, classification: "quantile" },
-          furniture: furniture(),
-        }),
-      };
-    },
+    id: "mexico-states",
+    title: "States of Mexico",
+    note: "Editorial reference plate · every state tinted and named, nothing else.",
+    poster: { eyebrow: "Teachers & students", headline: "The map for", em: "tomorrow's lesson.", prompt: "States of Mexico" },
+    subdivisionsOf: "Mexico",
+    build: () => ({
+      data: [],
+      spec: parseMapSpec({
+        title: "States of Mexico",
+        mapType: "reference",
+        style: "editorial",
+        geography: { level: "admin1", region: "Mexico" },
+        data: {},
+        symbology: { palette: "Blues", paletteKind: "sequential" },
+        furniture: bare({ legend: false }),
+      }),
+    }),
+  },
+  {
+    id: "peru-physical",
+    title: "Peru, physical",
+    note: "Atlas style · for when you do want the mountains: relief, rivers and peaks.",
+    poster: { eyebrow: "Publishers & guides", headline: "And when you want", em: "the mountains…", prompt: "Physical map of Peru" },
+    subdivisionsOf: "Peru",
+    build: () => ({
+      data: [],
+      spec: parseMapSpec({
+        title: "Peru: Physical",
+        mapType: "reference",
+        style: "atlas",
+        page: { size: "A4", orientation: "portrait" },
+        geography: { level: "admin1", region: "Peru" },
+        data: {},
+        symbology: { palette: "YlGn", paletteKind: "sequential" },
+        furniture: bare({ legend: false }),
+      }),
+    }),
   },
 ];

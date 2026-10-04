@@ -1,101 +1,55 @@
-import Image from "next/image";
-import { SpecimenPlate } from "@/components/marketing/AtlasGallery";
+import { PosterCard } from "@/components/marketing/AtlasGallery";
 import { SectionHeading } from "./SectionHeading";
 
-const STYLES = [
-  {
-    name: "Atlas",
-    tag: "Physical",
-    plate: "peru-stations",
-    photos: [
-      { src: "/media/atlas-compass.jpg", alt: "A physical atlas of Europe with a compass resting on it" },
-      { src: "/media/topo-brazil.jpg", alt: "A relief model of Brazil in greens and browns" },
-    ],
-    lede: "The page you pored over in school: lowland greens rising to ochre uplands and snow-capped ranges, the sea deepening from shallow cyan to ocean blue.",
-    points: [
-      "Hypsometric tints and hillshade from global 30 m terrain",
-      "Sea-floor depths, rivers and lakes thinned to your scale",
-      "Your data colours keep the terrain's texture",
-    ],
-  },
-  {
-    name: "Classic",
-    tag: "Political",
-    plate: "east-africa-footprint",
-    photos: [
-      { src: "/media/globe-museum.jpg", alt: "An illuminated political globe showing Africa in pastel colours" },
-      { src: "/media/world-colorful.jpg", alt: "A brightly coloured political world map" },
-    ],
-    lede: "The political map on the classroom wall: every country its own soft colour, coasts engraved with water lines, capitals marked with a ringed red dot.",
-    points: [
-      "Neighbour-aware pastel colouring — no two borders share a colour",
-      "Water-lined coasts in the engraver's manner",
-      "Countries, capitals and seas labelled in atlas type",
-    ],
-  },
-  {
-    name: "Minimal",
-    tag: "Report",
-    plate: "usa-minimal",
-    photos: [{ src: "/media/world-mono.png", alt: "A black and white world map" }],
-    lede: "For annual reports and journals where the data must be the only colour on the page. Paper, ink, hairlines — and nothing else competing.",
-    points: [
-      "Quiet paper-and-ink base map",
-      "ColorBrewer palettes, honest class breaks",
-      "Pairs with any brand guideline",
-    ],
-  },
+const LOOKS = [
+  { name: "Editorial", plate: "us-home-prices", line: "Flat land, crisp white borders, bold colour. The newsroom graphic, and the engine's default for data." },
+  { name: "Night", plate: "world-millionaires", line: "A dark ground where your data glows. Launches, decks and anything headed for a feed." },
+  { name: "Dots", plate: "europe-chargers", line: "Land and data printed as a dot matrix. Poster-ready, and nobody else's map looks like it." },
+  { name: "Atlas", plate: "peru-physical", line: "Relief, rivers and peaks, only when you ask for them. For textbooks, guides and physical maps." },
+];
+
+const MORE = [
+  ["Classic", "Political pastels, every country its own colour."],
+  ["Minimal", "Paper and ink, for journals and annual reports."],
+  ["Your words", "“Make it dark”, “dotted”, “magazine style”, “in our brand green”."],
 ];
 
 export function Styles() {
   return (
     <section id="styles" className="relative overflow-hidden bg-atlas-card py-24 lg:py-32">
-      <div className="graticule-bg pointer-events-none absolute inset-0 opacity-70" aria-hidden />
       <div className="relative mx-auto max-w-7xl px-5 lg:px-8">
         <SectionHeading
-          eyebrow="Three looks, one engine"
+          eyebrow="Six looks, one engine"
           title={
             <>
-              The atlases you grew up with — <em className="font-normal text-atlas-leather">now for your data.</em>
+              Not a GIS screenshot. <em className="font-normal text-atlas-leather">Something you'd frame.</em>
             </>
           }
-          sub="Pick a look, or let the engine choose. Every style carries the same cartographic rigour: equal-area projections, a real scale bar, labels that never collide."
+          sub="The engine picks the look that suits your data, or you pick one in a word. Every style keeps the rigour: honest projections, real class breaks, labels that never collide."
         />
 
-        <div className="mt-20 space-y-28">
-          {STYLES.map((s, i) => (
-            <article key={s.name} className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className={`min-w-0 ${i % 2 ? "lg:order-2" : ""}`}>
-                <p className="eyebrow text-atlas-leather">
-                  Style {String(i + 1).padStart(2, "0")} · {s.tag}
+        <div className="mt-16 grid gap-10 md:grid-cols-2">
+          {LOOKS.map((l, i) => (
+            <article key={l.name} className={i % 2 ? "md:mt-20" : ""}>
+              <PosterCard id={l.plate} compact />
+              <div className="mt-5 flex items-baseline gap-4">
+                <span className="eyebrow shrink-0 text-atlas-leather">{String(i + 1).padStart(2, "0")}</span>
+                <p className="text-atlas-ink-2">
+                  <span className="display text-xl font-semibold text-atlas-ink">{l.name}.</span> {l.line}
                 </p>
-                <h3 className="display mt-3 text-5xl font-semibold text-atlas-ink">{s.name}</h3>
-                <p className="mt-5 text-lg leading-relaxed text-atlas-ink-2">{s.lede}</p>
-                <ul className="mt-6 space-y-2.5">
-                  {s.points.map((p) => (
-                    <li key={p} className="flex gap-3 text-atlas-ink-2">
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rotate-45 bg-atlas-ochre" />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-8 flex flex-wrap items-end gap-4">
-                  {s.photos.map((ph, j) => (
-                    <figure key={ph.src} className="w-32 sm:w-40">
-                      <div className="photo plate aspect-[4/3]" style={{ transform: `rotate(${j ? 2 : -2}deg)` }}>
-                        <Image src={ph.src} alt={ph.alt} fill sizes="160px" className="object-cover p-[6px]" />
-                      </div>
-                    </figure>
-                  ))}
-                  <p className="atlas-label self-end pb-1 text-sm text-atlas-ink-2/80">
-                    {s.photos.length > 1 ? "The inspiration" : "Inspiration"}
-                  </p>
-                </div>
               </div>
-              <SpecimenPlate id={s.plate} caption={false} className={`min-w-0 ${i % 2 ? "lg:order-1" : ""}`} />
             </article>
           ))}
         </div>
+
+        <dl className="mt-20 grid gap-6 border-t border-atlas-rule pt-10 sm:grid-cols-3">
+          {MORE.map(([k, v]) => (
+            <div key={k}>
+              <dt className="display text-xl font-semibold text-atlas-ink">{k}</dt>
+              <dd className="mt-1 text-atlas-ink-2">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );
