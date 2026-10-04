@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
-import { MapTypeStep } from "./MapTypeStep";
+import { LookStep } from "./LookStep";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
@@ -51,9 +51,10 @@ export function CreateWizard() {
   const [prompt, setPrompt] = useState("");
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [roles, setRoles] = useState<ColumnRoles | null>(null);
+  // The engine picks the map type from the data; people pick the look and colours.
   const [mapType, setMapType] = useState<string | null>(null);
-  // Only a type the user actually picked binds the engine; the recommendation doesn't.
-  const [typeLocked, setTypeLocked] = useState(false);
+  const [look, setLook] = useState<MapSpec["style"] | null>(null);
+  const [palette, setPalette] = useState<string | null>(null);
   // Sample values the engine asked for when the brief described data it didn't include.
   const [sample, setSample] = useState<{ table: ParsedTable; roles: ColumnRoles } | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
@@ -102,7 +103,9 @@ export function CreateWizard() {
           table,
           roles,
           mapType,
-          mapTypeLocked: typeLocked,
+          mapTypeLocked: false,
+          look: opts?.previousSpec ? undefined : look ?? undefined,
+          palette: opts?.previousSpec ? undefined : palette ?? undefined,
           geography,
           title: brand.title || undefined,
           branding: {
@@ -263,14 +266,11 @@ export function CreateWizard() {
         )}
 
         {step === 1 && (
-          <MapTypeStep
-            geo={geo}
-            selected={mapType}
-            recommended={recommended}
-            onSelect={(t) => {
-              setMapType(t);
-              setTypeLocked(t !== recommended);
-            }}
+          <LookStep
+            look={look}
+            palette={palette}
+            onLook={setLook}
+            onPalette={setPalette}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />

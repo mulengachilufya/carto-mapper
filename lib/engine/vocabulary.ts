@@ -124,7 +124,7 @@ export const STYLE_WORDS: { re: RegExp; style: MapStyle }[] = [
   { re: /\beditorial\b|\bmagazine\b|\bnewspaper\b|\bnewsroom\b|\binfographic\b|\bflat\b|\bmodern\b|\bclean\b|\bsimple\b/, style: "editorial" },
   { re: /\bminimal\b|\bplain\b|\bmonochrome\b|\bacademic\b|\bjournal\b/, style: "minimal" },
   { re: /\bpolitical\b|\bpastel\b|\bclassic\b|\badministrative\b/, style: "classic" },
-  { re: /\bphysical\b|\bterrain\b|\brelief\b|\btopograph\w*\b|\bschool atlas\b|\batlas\b|\bnatural\b/, style: "atlas" },
+  { re: /\bphysical\b|\bterrain\b|\brelief\b|\btopograph\w*\b|\bschool atlas\b|\batlas\b/, style: "atlas" },
 ];
 
 /** Region names the renderer can frame (see CONTINENT_BBOX), with their display form. */
