@@ -58,7 +58,7 @@ export function DownloadPanel() {
     setBusy(true);
     setError(null);
     try {
-      await exportSvgToPdf(svg as SVGSVGElement, stash.spec.page, stash.title);
+      await exportSvgToPdf(svg as SVGSVGElement, stash.spec.page, stash.title, [stash.spec.typography?.title ?? "Carlito", stash.spec.typography?.text ?? "Carlito"]);
     } catch (e) {
       setError(`Couldn't generate the PDF (${e instanceof Error ? e.message : "error"}). Please try again.`);
     } finally {

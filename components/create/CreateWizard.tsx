@@ -5,6 +5,8 @@ import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
 import { LookStep } from "./LookStep";
+import type { Place, RawExtract } from "@/lib/mapspec/extract";
+import { buildResult } from "@/lib/mapspec/extractTable";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
 import type { ParsedTable, ColumnRoles } from "@/lib/data/parse";
@@ -55,6 +57,7 @@ export function CreateWizard() {
   const [mapType, setMapType] = useState<string | null>(null);
   const [look, setLook] = useState<MapSpec["style"] | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
+  const [fonts, setFonts] = useState({ title: "Carlito", text: "Carlito" });
   // Sample values the engine asked for when the brief described data it didn't include.
   const [sample, setSample] = useState<{ table: ParsedTable; roles: ColumnRoles } | null>(null);
   const [brand, setBrand] = useState<Brand>({ title: "", organisation: "", logoDataUrl: null, notes: "" });
@@ -62,6 +65,8 @@ export function CreateWizard() {
   // Where the data says the map is (e.g. "the counties of Kenya"), found by the resolver.
   const [resolution, setResolution] = useState<Resolution | null>(null);
   const [extracting, setExtracting] = useState(false);
+  // What the fact-check removed or corrected, shown so nothing changes silently.
+  const [checks, setChecks] = useState<string[]>([]);
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -106,6 +111,7 @@ export function CreateWizard() {
           mapTypeLocked: false,
           look: opts?.previousSpec ? undefined : look ?? undefined,
           palette: opts?.previousSpec ? undefined : palette ?? undefined,
+          fonts: opts?.previousSpec ? undefined : fonts,
           geography,
           title: brand.title || undefined,
           branding: {
@@ -193,7 +199,30 @@ export function CreateWizard() {
           body: JSON.stringify({ prompt, files }),
         });
         if (res.ok) {
-          const ex = await res.json();
+          const raw = (await res.json()) as RawExtract;
+          let places = raw.places ?? [];
+          const notes = [...(raw.checks ?? [])];
+          // Places the AI listed from memory go through an independent fact-check first.
+          if (raw.pending?.length) {
+            const chk = await fetch("/api/extract/check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ prompt, places: raw.pending }),
+            }).catch(() => null);
+            if (chk?.ok) {
+              const c = (await chk.json()) as { places: Place[]; checks: string[] };
+              places = places.concat(c.places ?? []);
+              notes.push(...(c.checks ?? []));
+            } else {
+              const certain = new Set(raw.certain ?? []);
+              for (const p of raw.pending) {
+                if (certain.has(p.name)) places.push(p);
+                else notes.push(`Left out "${p.name}": could not double-check it.`);
+              }
+            }
+          }
+          setChecks(notes);
+          const ex = buildResult({ ...(raw.meta ?? {}), places });
           if (ex.table && ex.roles) {
             // Run what the AI read through the same place resolver as pasted data:
             // geocode the towns and find the geography (e.g. the districts of Uganda).
@@ -239,6 +268,17 @@ export function CreateWizard() {
         </p>
       )}
 
+      {checks.length > 0 && step >= 1 && step < 3 && (
+        <div className="mx-auto mt-5 max-w-2xl rounded-lg border border-line bg-paper-2 px-4 py-3 text-sm text-ink">
+          <p className="font-semibold">We double-checked the places before drawing them</p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-muted">
+            {checks.slice(0, 8).map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {error && (
         <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {error}
@@ -271,6 +311,8 @@ export function CreateWizard() {
             palette={palette}
             onLook={setLook}
             onPalette={setPalette}
+            fonts={fonts}
+            onFonts={setFonts}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />

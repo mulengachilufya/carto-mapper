@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { geoPath, geoGraticule10, geoContains, geoCentroid, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
 import { scaleSqrt } from "d3-scale";
 import type { Feature, FeatureCollection } from "geojson";
-import type { MapSpec, MapStyle } from "@/lib/mapspec/schema";
+import { DEFAULT_MAP_FONT, type MapSpec, type MapStyle } from "@/lib/mapspec/schema";
 import { chooseProjection } from "@/lib/cartography/projection";
 import { classify, classIndex } from "@/lib/cartography/classify";
 import { getPaletteColors } from "@/lib/cartography/palettes";
@@ -32,18 +32,18 @@ const THEME = {
   paper: "#ffffff",
   water: "#dbe6ec", // sea on regional maps
   sphere: "#e5edf1", // sea on world maps
-  land: "#e6e2d7", // context land (neighbours)
-  focusLand: "#fbfaf5", // the country the map is about
-  noData: "#dcd8ce",
+  land: "#e4e8e6", // context land (neighbours)
+  focusLand: "#ffffff", // the country the map is about
+  noData: "#d9dedb",
   graticule: "#aab8c0",
   unitStroke: "#ffffff",
-  contextStroke: "#cbc5b6",
-  focusStroke: "#77715f",
-  ink: "#1f1f1a",
-  muted: "#66635a",
-  neat: "#3a3a32",
-  panel: "#fffffd",
-  panelBorder: "#d6d2c6",
+  contextStroke: "#c9d0cc",
+  focusStroke: "#6f7a75",
+  ink: "#161b19",
+  muted: "#5c6661",
+  neat: "#2f3633",
+  panel: "#ffffff",
+  panelBorder: "#d5dcd8",
   symbolStroke: "#ffffff",
 };
 
@@ -142,28 +142,28 @@ const STYLE: Record<
     graticule: THEME.graticule,
   },
   atlas: {
-    paper: "#fbf8f0",
+    paper: "#ffffff",
     water: "#b9dbee",
     sphere: "#b9dbee",
-    land: "#e4dfc4",
-    focusLand: "#e9eed2",
-    border: "#8a7666",
-    focusStroke: "#5a3b2c",
-    noData: "#e9e4d6",
+    land: "#e3e9e1",
+    focusLand: "#eef3e6",
+    border: "#7d8a84",
+    focusStroke: "#3f4c47",
+    noData: "#e3e8e5",
     graticule: "#5f86a3",
     river: "#3576b8",
     lake: "#a8d2ec",
-    reliefWash: "rgba(251,248,240,0.5)",
+    reliefWash: "rgba(255,255,255,0.5)",
   },
   classic: {
-    paper: "#fbf7ee",
+    paper: "#ffffff",
     water: "#cde6f4",
     sphere: "#cde6f4",
-    land: "#efe6cf",
-    focusLand: "#f5deaa",
-    border: "#8f7663",
-    focusStroke: "#6b4636",
-    noData: "#ebe4d3",
+    land: "#eef0ec",
+    focusLand: "#f3e3b0",
+    border: "#84918b",
+    focusStroke: "#45524d",
+    noData: "#e3e8e5",
     graticule: "#7fa8c6",
     river: "#4a8ccc",
     lake: "#cde6f4",
@@ -459,13 +459,16 @@ function buildMap(
 
     const r = Math.max(pointR, 3.5 * k);
     const rowH = Math.max(15 * k, 2 * r + 5 * k);
+    if (categorical && cats.length === 1 && /^(other|category|type|)$/i.test(cats[0].trim())) return null;
     if (categorical) {
       const title = wrapText(spec.data.valueLabel || categoryTitle(spec.data.categoryField), 30, 2);
       const rows = cats.map((c) => ({ color: colorForCat(c), r, label: c }));
       const labelW = Math.max(...rows.map((row) => textW(row.label, labelSize)));
       return { kind: "symbols", rowH, title, rows, ...box(title, 2 * r + 7 * k + labelW, rows.length * rowH - 4 * k) };
     }
-    const label = spec.mapType === "dot" ? "1 dot = 1 record" : spec.data.valueLabel || "Location";
+    if (spec.mapType !== "dot" && (!spec.data.valueLabel || /^(category|type|location|locations|value|name|site|sites|place|places|point|points)$/i.test(spec.data.valueLabel.trim())))
+      return null;
+    const label = spec.mapType === "dot" ? "1 dot = 1 record" : spec.data.valueLabel!;
     const rows = [{ color: symbolFill, r, label }];
     return { kind: "symbols", rowH, title: [], rows, ...box([], 2 * r + 7 * k + textW(label, labelSize), rowH - 4 * k) };
   }
@@ -473,7 +476,7 @@ function buildMap(
   // ── Header (title block + logo) ──
   const titleSize = 22 * k;
   const logoSize = b.logoDataUrl ? 46 * k : 0;
-  const titleMaxW = W - 2 * margin - (logoSize ? logoSize + 14 * k : 0);
+  const titleMaxW = W - 2 * margin - (logoSize ? 2 * (logoSize + 14 * k) : 0);
   const titleLines = f.title ? wrapText(spec.title, Math.max(12, Math.floor(titleMaxW / (titleSize * 0.47))), 2) : [];
   const header: { text: string; y: number; kind: "title" | "subtitle" | "org" }[] = [];
   let cursor = 0;
@@ -487,7 +490,7 @@ function buildMap(
   }
   if (f.title && b.organisation) {
     cursor += 15 * k;
-    header.push({ text: b.organisation.toUpperCase(), y: cursor, kind: "org" });
+    header.push({ text: b.organisation, y: cursor, kind: "org" });
   }
   const headerH = Math.max(cursor ? cursor + 12 * k : 0, logoSize ? logoSize + 10 * k : 0);
 
@@ -935,15 +938,15 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
 // Label typography by role, the conventions of a printed atlas: water in blue italic
 // serif, countries in spaced capitals, towns in a plain sans.
 const LABEL_STYLE: Record<MapLabel["role"], { fill: string; serif: boolean; italic?: boolean; weight?: number }> = {
-  country: { fill: "#6a5446", serif: true, weight: 600 },
+  country: { fill: "#55615c", serif: true, weight: 600 },
   "focus-city": { fill: "#1f1d1a", serif: false, weight: 600 },
-  city: { fill: "#5a544c", serif: false },
+  city: { fill: "#56605c", serif: false },
   ocean: { fill: "#2c5f8f", serif: true, italic: true },
   sea: { fill: "#2f6a9e", serif: true, italic: true },
   lake: { fill: "#2f6a9e", serif: true, italic: true },
-  peak: { fill: "#4b3527", serif: false },
-  region: { fill: "#7a5a3a", serif: true, italic: true },
-  unit: { fill: "#4e3b2c", serif: true, weight: 600 },
+  peak: { fill: "#3f4a46", serif: false },
+  region: { fill: "#5d6b66", serif: true, italic: true },
+  unit: { fill: "#3f4a46", serif: true, weight: 600 },
 };
 
 /** Political-atlas tints for reference plates: sand, sage, rose, lavender, butter. */
@@ -1070,8 +1073,11 @@ export function CartoMap({
   const reliefState = !reliefKey ? "none" : images ? "ready" : "pending";
 
   // jsPDF embeds standard PDF fonts; map our serif/sans to Times/Helvetica for export.
-  const serif = forPdf ? "times" : "var(--font-serif, Georgia, 'Times New Roman', serif)";
-  const sans = forPdf ? "helvetica" : "var(--font-sans, 'Inter', system-ui, sans-serif)";
+  // The map's own fonts (Carlito, a Calibri twin, by default), never the website's.
+  const fonts = spec.typography ?? { title: DEFAULT_MAP_FONT, text: DEFAULT_MAP_FONT };
+  useMapFonts(forPdf ? [] : [fonts.title, fonts.text]);
+  const serif = forPdf ? fonts.title : `'${fonts.title}', Carlito, Calibri, Arial, sans-serif`;
+  const sans = forPdf ? fonts.text : `'${fonts.text}', Carlito, Calibri, Arial, sans-serif`;
   const id = [frame.x, frame.y, frame.w, frame.h].map((v) => Math.round(v)).join("-");
   const clipId = `cm-clip-${id}`;
   const dataClipId = `cm-data-${id}-${m.units.filter((u) => u.data).length}-${m.regions.length}`;
@@ -1246,9 +1252,10 @@ export function CartoMap({
       {m.header.map((h, i) => (
         <text
           key={`h${i}`}
-          x={m.margin}
+          x={width / 2}
           y={h.y}
-          style={{ fontFamily: h.kind === "title" ? serif : sans, letterSpacing: h.kind === "org" ? "0.08em" : undefined }}
+          textAnchor="middle"
+          style={{ fontFamily: h.kind === "title" ? serif : sans }}
           fontSize={(h.kind === "title" ? 22 : h.kind === "subtitle" ? 11.5 : 9) * k}
           fontWeight={h.kind === "subtitle" ? 400 : 700}
           fill={h.kind === "title" ? c.ink : c.muted}
@@ -1305,19 +1312,19 @@ function AtlasLabel({ label: l, k, serif, sans, dark }: { label: MapLabel; k: nu
     <g>
       {m?.kind === "capital" && (
         <g>
-          <circle cx={m.x} cy={m.y} r={2.9 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />
+          <circle cx={m.x} cy={m.y} r={2.9 * k} fill="#ffffff" stroke="#1f2624" strokeWidth={0.8 * k} />
           <circle cx={m.x} cy={m.y} r={1.3 * k} fill="#b3261e" />
         </g>
       )}
-      {m?.kind === "provincial" && <circle cx={m.x} cy={m.y} r={2 * k} fill="#2a211b" stroke="#fffdf6" strokeWidth={0.7 * k} />}
-      {m?.kind === "town" && <circle cx={m.x} cy={m.y} r={1.6 * k} fill="#fffdf6" stroke="#2a211b" strokeWidth={0.8 * k} />}
+      {m?.kind === "provincial" && <circle cx={m.x} cy={m.y} r={2 * k} fill="#1f2624" stroke="#ffffff" strokeWidth={0.7 * k} />}
+      {m?.kind === "town" && <circle cx={m.x} cy={m.y} r={1.6 * k} fill="#ffffff" stroke="#1f2624" strokeWidth={0.8 * k} />}
       {m?.kind === "peak" && (
         <polygon
           points={`${m.x},${m.y - 3 * k} ${m.x + 2.8 * k},${m.y + 2 * k} ${m.x - 2.8 * k},${m.y + 2 * k}`}
-          fill="#3b2a20"
+          fill="#2f3835"
         />
       )}
-      {body({ fill: "none", stroke: dark ? "#0b1412" : "#fffcf2", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
+      {body({ fill: "none", stroke: dark ? "#0b1412" : "#ffffff", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
       {body({ fill: dark ? "#e8efe9" : st.fill })}
     </g>
   );
@@ -1460,4 +1467,24 @@ function Legend({
       </g>
     </g>
   );
+}
+
+/** Load the map's fonts from Google Fonts once per family (screen only; PDFs embed their own). */
+function useMapFonts(families: string[]) {
+  const key = families.join("|");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    for (const fam of new Set(key.split("|").filter(Boolean))) {
+      const id = `cm-font-${fam.replace(/\s+/g, "-")}`;
+      if (document.getElementById(id)) continue;
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      const q = encodeURIComponent(fam).replace(/%20/g, "+");
+      link.href = `https://fonts.googleapis.com/css2?family=${q}:wght@400;700&display=swap`;
+      // A family without a bold cut rejects the request; ask for it plain instead.
+      link.onerror = () => (link.href = `https://fonts.googleapis.com/css2?family=${q}&display=swap`);
+      document.head.appendChild(link);
+    }
+  }, [key]);
 }

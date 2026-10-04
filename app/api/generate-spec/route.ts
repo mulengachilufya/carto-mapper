@@ -103,6 +103,20 @@ export async function POST(req: Request) {
 
   // Every spec, rulebook's, AI's or revised, passes the engine's checks.
   spec = finalize(spec, run, facts, { aiDecisions, revision: revision?.revisionRequest });
+  // Titles: the customer's own title, word for word. Otherwise a plain third-person title
+  // ("Public Universities in Zambia, 2026"); anything that reads like a question or a pitch
+  // falls back to the rulebook's.
+  const titleAsked = Boolean(revision?.revisionRequest && /title|call it|name it|heading/i.test(revision.revisionRequest));
+  if (userTitle && !titleAsked) spec = parseMapSpec({ ...spec, title: userTitle });
+  else if (!titleAsked && !isPlainTitle(spec.title)) spec = parseMapSpec({ ...spec, title: (revision?.previousSpec.title && isPlainTitle(revision.previousSpec.title) ? revision.previousSpec.title : run.plan.spec.title) });
+
+  // Fonts: what the customer picked, kept through every change.
+  const FONT = /^[A-Za-z0-9][A-Za-z0-9 ]{1,40}$/;
+  const f = body.fonts as { title?: unknown; text?: unknown } | undefined;
+  if (revision) spec = parseMapSpec({ ...spec, typography: revision.previousSpec.typography });
+  else if (f && typeof f.title === "string" && typeof f.text === "string" && FONT.test(f.title) && FONT.test(f.text))
+    spec = parseMapSpec({ ...spec, typography: { title: f.title, text: f.text } });
+
   // The look and colours picked in the wizard always win.
   const look = typeof body.look === "string" && (MAP_STYLES as readonly string[]).includes(body.look) ? (body.look as MapSpec["style"]) : undefined;
   const pal =
@@ -195,4 +209,14 @@ function limitMessage(u: Usage): string {
 function relative(iso: string): string {
   const mins = Math.max(1, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
   return mins < 60 ? `in ${mins} minute${mins > 1 ? "s" : ""}` : `in about ${Math.round(mins / 60)} hour${mins >= 90 ? "s" : ""}`;
+}
+
+/** A title states what and where, in the third person. No questions, no pitch, no "map of". */
+function isPlainTitle(t: string): boolean {
+  const x = t.trim();
+  if (!x || /[?!]/.test(x)) return false;
+  if (/^(where|how|why|what|which|who|when|here|this|these|see|explore|discover|meet|map\b|a map|the map|mapping|showing|visuali[sz]ing|tracking|inside|behind)/i.test(x)) return false;
+  if (/\b(you|your|our|we|us)\b/i.test(x)) return false;
+  if (/\b(are|is)\s*$/i.test(x)) return false;
+  return true;
 }

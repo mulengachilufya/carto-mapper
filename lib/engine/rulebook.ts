@@ -220,7 +220,8 @@ export function design(f: Facts): Design {
   log("F1", "Map elements", small ? "Graticule, no scale bar" : "Scale bar and north arrow", small ? "At world and continent scale the scale changes across the map, so a single scale bar would lie; the graticule shows the geometry instead." : "At country scale distance is meaningful, so a scale bar is shown; the grid would only clutter.", "rules");
 
   // ── N. Words: an atlas title, a subtitle that carries the units and date ──
-  const place = region && region !== "World" ? region : undefined;
+  // The place for the title: the resolved region, or a city/area named in the brief ("in Seoul").
+  const place = region && region !== "World" ? region : placePhrase(brief.text);
   const unitSingular = brief.units && brief.units.level !== "points" ? brief.units.singular : level === "admin2" ? "District" : level === "admin1" ? "Province" : "Country";
   const metric = roles.valueField && !GENERIC.test(roles.valueField) ? titleOf(roles.valueField) : brief.theme?.label;
   // "Cases per 1,000" says nothing on its own; the brief says which disease.
@@ -237,10 +238,13 @@ export function design(f: Facts): Design {
   else if (mapType === "point") title = `${subject ?? metricT ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
   else if (subject && metric) title = `${subject} by ${metric}${place ? `, ${place}` : ""}`;
   else title = `${metricT ?? subject ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
+  // A plain year belongs in the title ("Public Universities in Zambia, 2026"); "Since 1990" stays a subtitle.
+  const yearInTitle = !f.userTitle && brief.year && /^\d{4}$/.test(brief.year);
+  if (yearInTitle) title = `${title}, ${brief.year}`;
   const subtitleParts = [
     rows && mapType === "footprint" ? list(brief.countries) : null,
     brief.theme?.unit && mapType !== "reference" && !roles.valueField ? brief.theme.unit : null,
-    brief.year,
+    yearInTitle ? null : brief.year,
     illustrative ? "Illustrative data. Replace with your own" : null,
   ].filter(Boolean);
   log("N1", "Title", title, f.userTitle ? "Your title." : "What, by what unit and where: the way an atlas titles a plate.", f.userTitle ? "brief" : "rules");
@@ -281,12 +285,14 @@ export function design(f: Facts): Design {
 /** What the sites are, in the brief's own words ("Refugee Settlements", "Coffee Cooperatives"). */
 function subjectOf(b: Brief): string | null {
   const nouns =
-    "health facilities|facilities|clinics|hospitals|health posts|schools|universities|offices|branches|stores|shops|outlets|depots|warehouses|boreholes|wells|water points|mines|mining operations|operations|projects|stations|camps|settlements|cooperatives|farms|plants|sites|locations|hubs|agents|churches|congregations|hotels|lodges|parks|venues|clubs|towers";
+    "health facilities|facilities|clinics|hospitals|health posts|schools|universities|offices|branches|stores|shops|outlets|depots|warehouses|boreholes|wells|water points|mines|mining operations|operations|projects|stations|camps|settlements|cooperatives|farms|plants|sites|locations|hubs|agents|churches|congregations|hotels|lodges|parks|venues|clubs|towers|universit\\w*|colleges|campuses|airports|ports|restaurants|cafes|coffee shops|bars|gyms|studios|banks|atms|pharmacies|factories|museums|stadiums|mosques|temples|markets|malls|showrooms|dealerships|embassies|chargers|charging points|resorts";
   const m = b.text.match(new RegExp(`\\b((?:[a-z][a-z-]+\\s){0,2}?)(${nouns})\\b`, "i"));
   if (!m) return null;
   // Keep a describing word or two ("refugee settlements", "coffee cooperatives"), never filler.
   const lead = m[1].trim().split(/\s+/).filter((w) => w && !/^(our|the|all|my|new|proposed|of|in|by|and|a|an)$/i.test(w));
-  return titleOf([...lead, m[2]].join(" "));
+  // Spell the noun properly even when the brief didn't ("universites" → "Universities").
+  const noun = /^universit/i.test(m[2]) ? "universities" : m[2];
+  return titleOf([...lead, noun].join(" "));
 }
 
 function describeGeo(level: GeoLevel, region?: string): string {
@@ -314,3 +320,12 @@ const LABELS: Record<MapType, string> = {
 const label = (t: MapType) => LABELS[t];
 const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] ?? "");
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+/** "coffee shops in seoul" → "Seoul": a place the gazetteer doesn't hold, read from the brief's own words. */
+function placePhrase(text: string): string | undefined {
+  const m = text.match(/\b(?:in|across|around|throughout)\s+((?:the\s+)?[a-zà-ÿ][\w'.-]*(?:\s+[a-zà-ÿ][\w'.-]*){0,2}?)(?=\s*(?:[,.;!?]|$|\s+(?:by|as of|for|from|with|sized|during|over|since|in\s+\d{4}|\d{4})))/i);
+  if (!m) return undefined;
+  const words = m[1].replace(/^the\s+/i, "").split(/\s+/);
+  if (words.some((w) => /^\d/.test(w))) return undefined;
+  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}

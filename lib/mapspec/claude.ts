@@ -178,7 +178,8 @@ How to decide:
 - Shares stored as fractions (0 to 1) format as ".0%"; percentages stored 0 to 100 need a "%" in the legend label instead.
 - World and continent maps: graticule on, no scale bar (scale varies across them), no north arrow on world maps. Country and smaller: scale bar and a discreet north arrow, no graticule. Place names on, unless a dense choropleth of many small regions would be cluttered.
 - Portrait suits tall places (Chile, Japan, Malawi, Norway) and report pages; landscape suits wide ones and the world.
-- Titles are editorial and specific ("Household Access to Piped Water by County, Kenya"), never "Map of data". Put units, dates and "illustrative data" in the subtitle.
+- Titles are plain, third-person statements of what and where, the way an atlas or a statistics office titles a map: "Public Universities in Zambia, 2026", "Household Access to Piped Water by County, Kenya", "Median Home Value by State, United States". Never a question, never marketing, never "Map of", "Map showing", "Where X are", "Explore", possessives like "Zambia's", or "you/our". If the customer gave a title, use it exactly. Put units and "illustrative data" in the subtitle.
+- Only use names you are certain exist exactly as written. Never invent or shorten official names of institutions, sites or places.
 - Keep it clean: place names only where they help, legend compact, no graticule except on world/continent maps. Pick a palette that suits the subject and feels confident (money: greens/golds; risk and heat: oranges/reds; health and water: teals/blues), never muddy.
 - Honour the customer's explicit wishes (colours, style, emphasis) unless they break cartographic honesty; then do the honest thing and explain why in the rationale.
 - Never use em dashes or en dashes anywhere in titles, subtitles, captions or rationale. Use commas, colons or full stops.

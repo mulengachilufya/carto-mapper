@@ -23,7 +23,7 @@ export const UNIT_WORDS: { re: RegExp; level: UnitLevel; singular: string; plura
   { re: /\bconstituenc(?:y|ies)\b/, level: "admin2", singular: "Constituency", plural: "Constituencies" },
   { re: /\blgas?\b|\blocal government areas?\b/, level: "admin2", singular: "LGA", plural: "LGAs" },
   { re: /\bcountries\b|\bnations\b|\bcountry\b|\bnational\b|\bmember states\b/, level: "countries", singular: "Country", plural: "Countries" },
-  { re: /\b(sites?|locations?|facilit(?:y|ies)|clinics?|hospitals?|schools?|offices?|boreholes?|wells?|mines?|cities|towns?|villages?|stations?|branches?|stores?|shops?|projects?|points?|camps?)\b/, level: "points", singular: "Site", plural: "Sites" },
+  { re: /\b(sites?|locations?|facilit(?:y|ies)|clinics?|hospitals?|schools?|offices?|boreholes?|wells?|mines?|cities|towns?|villages?|stations?|branches?|stores?|shops?|projects?|points?|camps?|universit\w*|colleges?|campus(?:es)?|airports?|ports?|harbou?rs?|hotels?|resorts?|restaurants?|caf[eé]s?|coffee shops?|bars?|gyms?|studios?|banks?|atms?|pharmac(?:y|ies)|factor(?:y|ies)|plants?|warehouses?|depots?|chargers?|charging points?|museums?|stadiums?|churches|mosques?|temples?|markets?|malls?|showrooms?|dealerships?|embassies|embassy|headquarters|hqs?)\b/, level: "points", singular: "Site", plural: "Sites" },
 ];
 
 /**
@@ -92,7 +92,7 @@ export const THEMES: { re: RegExp; theme: Theme }[] = [
   { re: /forest|deforestation|tree cover|vegetation|ndvi/, theme: { id: "forest", label: "Forest Cover", unit: "%", palette: "Greens", diverging: "BrBG", format: ".0f" } },
   { re: /gdp|income|wealth|economic|economy|earnings|revenue/, theme: { id: "economy", label: "GDP per Capita", unit: "US$", palette: "BuGn", format: "$,.0f" } },
   { re: /unemploy|jobless/, theme: { id: "unemployment", label: "Unemployment Rate", unit: "%", palette: "PuRd", format: ".1f" } },
-  { re: /coffee|cocoa|\btea\b|wine|vineyards?|cotton/, theme: { id: "commodity", label: "Production", palette: "YlOrBr", format: ",.0f", count: true } },
+  { re: /\bcoffee\b(?!\s*(?:shops?|houses?|bars?|chains?))|cocoa|\btea\b(?!\s*(?:shops?|rooms?|houses?))|\bwine\b(?!\s*bars?)|vineyards?|cotton/, theme: { id: "commodity", label: "Production", palette: "YlOrBr", format: ",.0f", count: true } },
   { re: /maize|\brice\b|wheat|crop|yield|harvest|agricultur|farm|livestock|cattle/, theme: { id: "agriculture", label: "Crop Yield", unit: "t/ha", palette: "YlGn", format: ".1f" } },
   { re: /mining|minerals?|copper|gold|cobalt/, theme: { id: "mining", label: "Mineral Output", palette: "YlOrBr", format: ".3s" } },
   { re: /crime|conflict|violence|incidents?|attacks?/, theme: { id: "conflict", label: "Incidents", palette: "Reds", format: ",", count: true } },
