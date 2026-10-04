@@ -23,8 +23,8 @@ export function Hero() {
           Put your world <em className="font-normal text-atlas-sage">on the map.</em>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-atlas-paper/80">
-          Any place on Earth, any data. Describe it in a sentence and get a map worth sharing in three minutes: bold,
-          clean, on-brand, ready for the deck, the report or the feed.
+          CartoMapper is where you make any map, for any industry or subject, in under three minutes: describe it in one
+          message or bring your own data.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <Link
