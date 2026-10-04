@@ -97,8 +97,27 @@ export function paletteKind(name: string): PaletteKind {
   return REGISTRY[name]?.kind ?? "sequential";
 }
 
+const HEX = /^#[0-9a-f]{6}$/i;
+const mix = (a: string, b: string, t: number) => {
+  const pa = a.match(/\w\w/g)!.map((x) => parseInt(x, 16));
+  const pb = b.match(/\w\w/g)!.map((x) => parseInt(x, 16));
+  return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join("");
+};
+
+/** A brand colour ("#1f5c4d") as a light-to-dark ramp around it. */
+function customRamp(hex: string, k: number): string[] {
+  return Array.from({ length: k }, (_, i) => {
+    const t = k === 1 ? 1 : i / (k - 1);
+    return t < 0.7 ? mix("#f7f4ee", hex, 0.14 + (t / 0.7) * 0.86) : mix(hex, "#000000", ((t - 0.7) / 0.3) * 0.35);
+  });
+}
+
 /** Discrete colours for a classed map. Clamped to a sensible 3–9 class range. */
 export function getPaletteColors(name: string, classes: number, reverse = false): string[] {
+  if (HEX.test(name)) {
+    const colors = customRamp(name, Math.max(3, Math.min(9, classes)));
+    return reverse ? colors.reverse() : colors;
+  }
   const def = REGISTRY[name] ?? REGISTRY.Blues;
   let colors: string[];
   if (def.kind === "qualitative") {

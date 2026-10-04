@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
 import { plan, finalize } from "@/lib/engine";
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
-import { parseMapSpec, MAP_TYPES, GEO_LEVELS, type Decision, type MapSpec } from "@/lib/mapspec/schema";
+import { parseMapSpec, MAP_TYPES, MAP_STYLES, GEO_LEVELS, type Decision, type MapSpec } from "@/lib/mapspec/schema";
+import { paletteKind, PALETTES_BY_KIND } from "@/lib/cartography/palettes";
 import { accountsEnabled, getCurrentUser, getServiceSupabase } from "@/lib/supabase/server";
 import { getOwnJob, type JobRow } from "@/lib/jobs";
 import { CHANGES_PER_MAP, DAILY_MAP_LIMIT, getUsage, type Usage } from "@/lib/quota";
@@ -95,9 +96,29 @@ export async function POST(req: Request) {
   if (body.branding && typeof body.branding === "object") spec = parseMapSpec({ ...spec, branding: body.branding });
   if (body.outputOptions) spec = parseMapSpec({ ...spec, furniture: { ...spec.furniture, ...(body.outputOptions as object) } });
   if (lockedType) spec = parseMapSpec({ ...spec, mapType: lockedType });
+  // The AI may not drag a first draft back to terrain-and-rivers looks the customer never asked for.
+  const OLD_LOOKS = ["atlas", "classic", "minimal"];
+  if (!revision && !run.brief.style && OLD_LOOKS.includes(spec.style) && !OLD_LOOKS.includes(baseline.style))
+    spec = parseMapSpec({ ...spec, style: baseline.style });
 
   // Every spec — rulebook's, AI's or revised — passes the engine's checks.
   spec = finalize(spec, run, facts, { aiDecisions, revision: revision?.revisionRequest });
+  // The look and colours picked in the wizard always win.
+  const look = typeof body.look === "string" && (MAP_STYLES as readonly string[]).includes(body.look) ? (body.look as MapSpec["style"]) : undefined;
+  const pal =
+    typeof body.palette === "string" && (/^#[0-9a-f]{6}$/i.test(body.palette) || PALETTES_BY_KIND.sequential.includes(body.palette)) ? body.palette : undefined;
+  if (!revision && (look || pal)) {
+    const picked: Decision[] = [];
+    if (look) picked.push({ rule: "U1", topic: "Style", choice: look, because: "You picked this look.", by: "brief" });
+    const recolour = pal && spec.mapType !== "categorical_point" && paletteKind(spec.symbology.palette) !== "diverging";
+    if (recolour) picked.push({ rule: "U2", topic: "Colour", choice: pal!, because: "You picked these colours.", by: "brief" });
+    spec = parseMapSpec({
+      ...spec,
+      style: look ?? spec.style,
+      symbology: recolour ? { ...spec.symbology, palette: pal!, paletteKind: "sequential", reverse: false } : spec.symbology,
+      decisions: [...(spec.decisions ?? []).filter((d) => !(look && d.topic === "Style") && !(recolour && d.topic === "Colour")), ...picked],
+    });
+  }
   // Rows implied by the brief itself ("where we work: Kenya, Uganda, Tanzania").
   const rows = !input.table?.rows.length && !revision ? run.plan.rows ?? null : null;
 
