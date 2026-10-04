@@ -2,7 +2,7 @@ import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { CreateWizard } from "@/components/create/CreateWizard";
 
-export const metadata = { title: "Create a map — CartoMapper" };
+export const metadata = { title: "Create a map · CartoMapper" };
 
 export default function CreatePage() {
   return (

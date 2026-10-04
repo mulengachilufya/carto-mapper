@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("extract error:", err);
-    // Degrade gracefully — the flow continues with whatever the user provided.
+    // Degrade gracefully, the flow continues with whatever the user provided.
     return NextResponse.json({ table: null, roles: null });
   }
 }

@@ -6,8 +6,8 @@ import { sendWelcomeIfNew } from "@/lib/email";
 
 /**
  * Landing page for links in Supabase emails (confirm sign-up, reset password).
- * Handles both link styles Supabase can send — `?code=` (PKCE) and
- * `?token_hash=&type=` — signs the user in, then sends them on to `next`.
+ * Handles both link styles Supabase can send, `?code=` (PKCE) and
+ * `?token_hash=&type=`, signs the user in, then sends them on to `next`.
  */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);

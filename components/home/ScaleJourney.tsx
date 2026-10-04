@@ -21,14 +21,14 @@ const SCALES = [
     alt: "Aerial view of farmland, a village and a railway line",
     ratio: "1 : 2 000 000",
     title: "A country, its provinces, its districts",
-    body: "Official boundaries for 199 countries down to district level — shade the 47 prefectures of Japan, the 3,000 counties of the US or the 33 boroughs of London.",
+    body: "Official boundaries for 199 countries down to district level. Shade the 47 prefectures of Japan, the 3,000 counties of the US or the 33 boroughs of London.",
   },
   {
     img: "/media/figure-05.jpg",
     alt: "Aerial view of a town's streets and rooftops",
     ratio: "1 : 250 000",
     title: "Your sites",
-    body: "Clinics, schools, stores, stations — placed from coordinates or just their names, labelled without collisions.",
+    body: "Clinics, schools, stores, stations: placed from coordinates or just their names, labelled without collisions.",
   },
 ];
 
@@ -53,7 +53,7 @@ export function ScaleJourney() {
               <div className="photo plate aspect-[4/5]" style={{ transform: `rotate(${[-1.2, 0.8, -0.6, 1][i]}deg)` }}>
                 <Image src={s.img} alt={s.alt} fill sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" className="object-cover p-[10px]" />
               </div>
-              <p className="mt-6 font-mono text-xs tracking-wider text-atlas-moss">{s.ratio}</p>
+              <p className="mt-6 tabular-nums text-xs text-atlas-moss">{s.ratio}</p>
               <h3 className="display mt-1.5 text-2xl font-semibold text-atlas-ink">{s.title}</h3>
               <p className="mt-2 leading-relaxed text-atlas-ink-2">{s.body}</p>
             </li>

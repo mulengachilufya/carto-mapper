@@ -31,14 +31,14 @@ export function BrandStep({ title, organisation, logoDataUrl, notes, onChange, o
   return (
     <div>
       <h2 className="display text-4xl font-semibold text-ink">Make it yours</h2>
-      <p className="mt-1.5 text-muted">Title, organisation, logo, and any caption — these go straight onto the map.</p>
+      <p className="mt-1.5 text-muted">Title, organisation, logo and any caption. These go straight onto the map.</p>
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <Field label="Map title">
           <input
             value={title}
             onChange={(e) => onChange({ title: e.target.value })}
-            placeholder="Leave blank — the engine titles it the way an atlas would"
+            placeholder="Leave blank and the engine writes one"
             className={INPUT}
           />
         </Field>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/LoginForm";
 
-export const metadata = { title: "Sign in — CartoMapper" };
+export const metadata = { title: "Sign in · CartoMapper" };
 
 export default function LoginPage() {
   return (

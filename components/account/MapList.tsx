@@ -5,12 +5,12 @@ import Link from "next/link";
 import type { JobSummary } from "@/lib/jobs";
 
 const STYLE_SWATCH: Record<string, string> = {
-  editorial: "linear-gradient(135deg,#e3dfd6 0 45%,#c0614f 45% 70%,#8b2e26 70%)",
+  editorial: "linear-gradient(135deg,#e3e7e5 0 45%,#c0614f 45% 70%,#8b2e26 70%)",
   night: "radial-gradient(circle at 60% 45%,#fff1c2 0,#ff9a3c 14%,#17221f 50%)",
-  dots: "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/8px 8px,#f6f1e7",
+  dots: "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/8px 8px,#ffffff",
   atlas: "linear-gradient(135deg,#a9c9a0 0%,#e8d9a6 45%,#c79a6b 75%,#9fc3d6 100%)",
   classic: "linear-gradient(135deg,#f3d9b1 0%,#cfe0b4 35%,#f1c6c3 65%,#bcd6ea 100%)",
-  minimal: "linear-gradient(135deg,#f5f1e8 0%,#d9d3c4 60%,#8a8171 100%)",
+  minimal: "linear-gradient(135deg,#f4f6f5 0%,#d9d3c4 60%,#8a8171 100%)",
 };
 
 const TYPE_LABEL: Record<string, string> = {

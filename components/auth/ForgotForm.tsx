@@ -87,7 +87,7 @@ export function ForgotForm() {
         </FormMessage>
         <Field label="Code from the email">
           <input
-            className={`${fieldClass} font-mono text-lg tracking-[0.4em]`}
+            className={`${fieldClass} tabular-nums text-lg tracking-[0.4em]`}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
             inputMode="numeric"

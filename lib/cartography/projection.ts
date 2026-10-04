@@ -39,7 +39,7 @@ export function chooseProjection(
   } else if (h.includes("equalearth") || h.includes("equal_earth") || level === "world") {
     projection = geoEqualEarth();
   } else if (h.includes("azimuthal") || level === "continent") {
-    // Lambert azimuthal equal-area centred on the region — the standard for continents.
+    // Lambert azimuthal equal-area centred on the region, the standard for continents.
     projection = geoAzimuthalEqualArea().rotate([-lonC, -latC]);
   } else {
     // country / admin1 / admin2 / regional → equal-area conic fitted to bounds

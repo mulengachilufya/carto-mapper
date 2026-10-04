@@ -57,29 +57,29 @@ Make your first map: ${cta}
 Happy mapping,
 The CartoMapper team`;
 
-  const html = `<!doctype html><html><body style="margin:0;background:#f6f0e2;font-family:Georgia,'Times New Roman',serif;">
+  const html = `<!doctype html><html><body style="margin:0;background:#ffffff;font-family:Georgia,'Times New Roman',serif;">
 <div style="display:none;max-height:0;overflow:hidden;">Your account is ready. Make up to ${DAILY_MAP_LIMIT} atlas-grade maps a day, free.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f0e2;padding:32px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 12px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fbf8f0;border:1px solid #d9ceb6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe5e2;">
   <tr><td style="background:#0e2620;padding:14px 20px;">
     <img src="${APP_URL}/brand/cartomapper-logo-reversed.png" alt="CartoMapper" width="220" style="display:block;border:0;max-width:220px;height:auto;">
   </td></tr>
   <tr><td style="padding:32px 32px 32px;">
-    <h1 style="margin:0 0 16px;font-size:26px;line-height:1.25;color:#1c1a17;font-weight:600;">Welcome, ${esc(name)}.</h1>
-    <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4a443b;">
+    <h1 style="margin:0 0 16px;font-size:26px;line-height:1.25;color:#111614;font-weight:600;">Welcome, ${esc(name)}.</h1>
+    <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
       Your CartoMapper account is ready. Describe any place on Earth in a sentence, add whatever data you have, and
       CartoMapper draws it the way a printed atlas would: real terrain, rivers, place names and a legend that means something.
     </p>
-    <p style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4a443b;">
-      It's <strong style="color:#1c1a17;">free</strong>. Make up to <strong style="color:#1c1a17;">${DAILY_MAP_LIMIT} new maps a day</strong>,
+    <p style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
+      It's <strong style="color:#111614;">free</strong>. Make up to <strong style="color:#111614;">${DAILY_MAP_LIMIT} new maps a day</strong>,
       change them as often as you like, and download print-ready PDF and SVG files with no watermark.
     </p>
     <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#8b2e26;border-radius:999px;">
-      <a href="${cta}" style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#fbf8f0;text-decoration:none;">Make your first map</a>
+      <a href="${cta}" style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Make your first map</a>
     </td></tr></table>
   </td></tr>
-  <tr><td style="border-top:1px solid #d9ceb6;padding:18px 32px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a7266;">
+  <tr><td style="border-top:1px solid #dfe5e2;padding:18px 32px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a7266;">
     You're receiving this because you created a CartoMapper account with ${esc(to)}. Questions? Just reply.
   </td></tr>
 </table>
@@ -100,17 +100,17 @@ Enter it on the reset page, along with your new password. The code works once an
 If you didn't ask for this, you can ignore this email; your password stays the same.
 
 The CartoMapper team`;
-  const html = `<!doctype html><html><body style="margin:0;background:#f6f0e2;font-family:Georgia,'Times New Roman',serif;">
+  const html = `<!doctype html><html><body style="margin:0;background:#ffffff;font-family:Georgia,'Times New Roman',serif;">
 <div style="display:none;max-height:0;overflow:hidden;">Your code: ${code}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f0e2;padding:32px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 12px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fbf8f0;border:1px solid #d9ceb6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #dfe5e2;">
   <tr><td style="background:#0e2620;padding:14px 20px;">
     <img src="${APP_URL}/brand/cartomapper-logo-reversed.png" alt="CartoMapper" width="200" style="display:block;border:0;max-width:200px;height:auto;">
   </td></tr>
   <tr><td style="padding:32px;">
-    <h1 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#1c1a17;font-weight:600;">Reset your password</h1>
-    <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4a443b;">
+    <h1 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#111614;font-weight:600;">Reset your password</h1>
+    <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
       Hi ${esc(name)}, here is your code. Enter it on the reset page with your new password.
     </p>
     <p style="margin:0 0 20px;font-family:'Courier New',monospace;font-size:34px;letter-spacing:10px;font-weight:bold;color:#1f5c4d;">${esc(code)}</p>

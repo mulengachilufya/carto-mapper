@@ -6,7 +6,7 @@ import { asNumber, type ColumnRoles, type ParsedTable } from "@/lib/data/parse";
  *
  *  • skew and outliers        → quantile / natural breaks vs equal interval
  *  • values crossing zero     → diverging palette around a meaningful midpoint
- *  • shares (0–1 or 0–100)    → percentage formatting
+ *  • shares (0 to 1 or 0 to 100)    → percentage formatting
  *  • how many distinct values → how many classes the data can honestly support
  */
 export interface DataProfile {

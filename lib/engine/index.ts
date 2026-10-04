@@ -1,10 +1,10 @@
 /**
- * The CartoMapper engine — the backbone every map goes through:
+ * The CartoMapper engine, the backbone every map goes through:
  *
- *   1. readBrief  — what was asked: place, units, subject, intent (brief.ts)
- *   2. design     — the rulebook's map, every decision with its reason (rulebook.ts)
+ *   1. readBrief , what was asked: place, units, subject, intent (brief.ts)
+ *   2. design    , the rulebook's map, every decision with its reason (rulebook.ts)
  *   3. the AI designer may propose a better one, given 1 and 2 (mapspec/claude.ts)
- *   4. inspect    — checks that correct any spec that contradicts the brief, the
+ *   4. inspect   , checks that correct any spec that contradicts the brief, the
  *                   data or cartographic practice, and log each correction (inspect.ts)
  *
  * Without an AI key, steps 1, 2 and 4 alone produce the map.
@@ -57,6 +57,22 @@ export function finalize(
       palette: /colou?r|green|blue|red|purple|orange|grey|gray|brown|pink|teal/.test(r),
     },
   });
-  const decisions = opts.aiDecisions?.length ? [...opts.aiDecisions, ...fixes] : [...run.plan.decisions, ...fixes];
-  return parseMapSpec({ ...spec, decisions });
+  const decisions = (opts.aiDecisions?.length ? [...opts.aiDecisions, ...fixes] : [...run.plan.decisions, ...fixes]).map((d) => ({
+    ...d,
+    choice: noDash(d.choice),
+    because: noDash(d.because),
+  }));
+  return parseMapSpec({
+    ...spec,
+    title: noDash(spec.title),
+    subtitle: spec.subtitle ? noDash(spec.subtitle) : spec.subtitle,
+    caption: spec.caption ? noDash(spec.caption) : spec.caption,
+    source: spec.source ? noDash(spec.source) : spec.source,
+    decisions,
+  });
+}
+
+/** House style: no em or en dashes in anything a reader sees. */
+export function noDash(text: string): string {
+  return text.replace(/\s*[\u2014\u2013]\s*/g, ", ").replace(/,\s*,/g, ",");
 }

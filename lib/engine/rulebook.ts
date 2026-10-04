@@ -1,6 +1,6 @@
 /**
- * Step 2 of the engine: the rulebook. A written, ordered set of cartographic rules —
- * the decisions a professional cartographer makes, in the order they make them — each
+ * Step 2 of the engine: the rulebook. A written, ordered set of cartographic rules , 
+ * the decisions a professional cartographer makes, in the order they make them, each
  * recording what it chose and why. Given the same brief and data it always designs
  * the same map. The AI designer, when available, proposes; these rules and the
  * checks in inspect.ts dispose.
@@ -17,7 +17,7 @@ export interface Facts {
   brief: Brief;
   table?: ParsedTable | null;
   roles?: ColumnRoles;
-  /** Where the data resolver placed the data — authoritative about what the data names. */
+  /** Where the data resolver placed the data, authoritative about what the data names. */
   resolved?: { level: GeoLevel; region?: string };
   /** Title the user typed (always wins). */
   userTitle?: string;
@@ -104,7 +104,7 @@ export function design(f: Facts): Design {
       log("T2", "Map type", label(mapType), "Your values are totals. Shading countries of very different size by a total misleads the eye, so they are drawn as circles at each country's centre instead.", "rules");
     } else {
       mapType = "choropleth";
-      log("T2", "Map type", label(mapType), counts ? "Your values are totals over areas of different size — the map shades them as asked; consider rates (per 1,000 people or per km²) for a fairer picture." : "Your data give a value for each area, so each area is shaded by it.", "data");
+      log("T2", "Map type", label(mapType), counts ? "Your values are totals over areas of different size. The map shades them as asked; consider rates (per 1,000 people or per km²) for a fairer picture." : "Your data give a value for each area, so each area is shaded by it.", "data");
     }
   } else if (hasTable && hasName) {
     mapType = "footprint";
@@ -117,7 +117,7 @@ export function design(f: Facts): Design {
     mapType = level === "country" || level === "city" ? "proportional_symbol" : "choropleth";
     if (mapType === "choropleth" && level === "country") level = "admin1";
     illustrative = true;
-    log("T4", "Map type", label(mapType), `You described ${brief.theme ? brief.theme.label.toLowerCase() : "a subject"} but gave no numbers, so the map is drawn with clearly labelled illustrative values in the right places — replace them with your data.`, "rules");
+    log("T4", "Map type", label(mapType), `You described ${brief.theme ? brief.theme.label.toLowerCase() : "a subject"} but gave no numbers, so the map is drawn with clearly labelled illustrative values in the right places, replace them with your data.`, "rules");
   } else if (brief.intent === "locations") {
     mapType = "point";
     illustrative = true;
@@ -125,7 +125,7 @@ export function design(f: Facts): Design {
   } else {
     mapType = "reference";
     if (level === "country" && brief.place?.kind === "country") level = "admin1";
-    log("T6", "Map type", label(mapType), "No data to show — a reference map: every unit tinted apart from its neighbours and named, the way an atlas plate is.", "rules");
+    log("T6", "Map type", label(mapType), "No data to show, so this is a reference map: every unit tinted apart from its neighbours and named, the way an atlas plate is.", "rules");
   }
 
   // ── S. Style: what you asked for, then what the subject and map suit ──
@@ -146,7 +146,7 @@ export function design(f: Facts): Design {
     log("S2", "Style", "Editorial", "A clean plate: every unit softly tinted and named, no terrain or rivers competing with the names.", "rules");
   } else {
     style = "editorial";
-    log("S3", "Style", "Editorial", "Flat land and crisp borders keep the data the only thing on the page — no terrain, no rivers.", "rules");
+    log("S3", "Style", "Editorial", "Flat land and crisp borders keep the data the only thing on the page: no terrain, no rivers.", "rules");
   }
 
   // ── C. Classification: from the numbers themselves ──
@@ -189,7 +189,7 @@ export function design(f: Facts): Design {
     why = "The colour you asked for, as a light-to-dark ramp.";
     by = "brief";
   }
-  // ColorBrewer's red–blue ramps run red→blue; temperature reads warm-is-red, so flip them.
+  // ColorBrewer's red-blue ramps run red→blue; temperature reads warm-is-red, so flip them.
   const reverse = brief.theme?.id === "temperature" && (palette === "RdYlBu" || palette === "RdBu");
   if (mapType === "choropleth" || mapType === "footprint" || mapType === "proportional_symbol" || mapType === "categorical_point")
     log("K1", "Colour", palette, why, by);
@@ -241,9 +241,9 @@ export function design(f: Facts): Design {
     rows && mapType === "footprint" ? list(brief.countries) : null,
     brief.theme?.unit && mapType !== "reference" && !roles.valueField ? brief.theme.unit : null,
     brief.year,
-    illustrative ? "Illustrative data — replace with your own" : null,
+    illustrative ? "Illustrative data. Replace with your own" : null,
   ].filter(Boolean);
-  log("N1", "Title", title, f.userTitle ? "Your title." : "What, by what unit, and where — the way an atlas titles a plate.", f.userTitle ? "brief" : "rules");
+  log("N1", "Title", title, f.userTitle ? "Your title." : "What, by what unit and where: the way an atlas titles a plate.", f.userTitle ? "brief" : "rules");
 
   const valueLabel =
     mapType === "categorical_point"
@@ -295,8 +295,8 @@ function describeGeo(level: GeoLevel, region?: string): string {
     case "world": return "The world";
     case "continent": return r;
     case "country": return r;
-    case "admin1": return `${r} — first-level units (provinces/states)`;
-    case "admin2": return `${r} — districts`;
+    case "admin1": return `${r}: first-level units (provinces/states)`;
+    case "admin2": return `${r}: districts`;
     default: return r;
   }
 }

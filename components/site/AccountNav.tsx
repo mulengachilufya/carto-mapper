@@ -41,7 +41,7 @@ export function AccountNav() {
       {who ? (
         <Link href="/account" title={who.email} className="flex items-center gap-2 text-sm text-atlas-ink-2 hover:text-atlas-moss">
           <span className="hidden sm:inline">My maps</span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-atlas-rule bg-atlas-card font-mono text-xs font-semibold text-atlas-ink">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-atlas-rule bg-atlas-card tabular-nums text-xs font-semibold text-atlas-ink">
             {who.initials}
           </span>
         </Link>

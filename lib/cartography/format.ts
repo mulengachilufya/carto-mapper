@@ -2,7 +2,7 @@ import { format } from "d3-format";
 
 /** Format a metric value using an optional d3-format string (default thousands). */
 export function formatNumber(value: number, fmt?: string): string {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "n/a";
   try {
     return format(fmt || ",")(value);
   } catch {

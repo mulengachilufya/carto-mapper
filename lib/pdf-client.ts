@@ -10,7 +10,7 @@ export function pagePt(page: MapSpec["page"]): { w: number; h: number } {
 
 /**
  * Render an on-page SVG into a vector PDF entirely in the browser (jsPDF + svg2pdf).
- * No server, no headless Chrome — works on any host. The map is clean vector SVG, so
+ * No server, no headless Chrome, works on any host. The map is clean vector SVG, so
  * the result stays crisp at print resolution.
  */
 export async function exportSvgToPdf(svg: SVGSVGElement, page: MapSpec["page"], filename: string): Promise<void> {
@@ -28,7 +28,7 @@ export async function exportSvgToPdf(svg: SVGSVGElement, page: MapSpec["page"], 
 
 /**
  * Atlas-style maps render their terrain asynchronously (data-relief="pending" until
- * done). Wait for it so the PDF includes the relief — but never hang the download:
+ * done). Wait for it so the PDF includes the relief, but never hang the download:
  * after the timeout the PDF is exported with whatever has rendered.
  */
 async function waitForRelief(svg: SVGSVGElement, timeoutMs = 20_000): Promise<void> {

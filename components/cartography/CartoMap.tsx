@@ -27,9 +27,9 @@ import { placeAtlasLabels, type MapLabel } from "@/lib/cartography/labels";
 import { renderRelief, TERRAIN_ATTRIBUTION, type ReliefImages, type ReliefMode } from "@/lib/cartography/relief";
 import type { Row } from "@/lib/data/parse";
 
-// Restrained, paper-and-ink palette — the quiet base a cartographer builds on.
+// Restrained, paper-and-ink palette, the quiet base a cartographer builds on.
 const THEME = {
-  paper: "#fdfcf8",
+  paper: "#ffffff",
   water: "#dbe6ec", // sea on regional maps
   sphere: "#e5edf1", // sea on world maps
   land: "#e6e2d7", // context land (neighbours)
@@ -83,14 +83,14 @@ const STYLE: Record<
   }
 > = {
   editorial: {
-    paper: "#faf8f4",
+    paper: "#ffffff",
     water: "#e8f0f4",
     sphere: "#e8f0f4",
-    land: "#e3dfd6",
-    focusLand: "#ebe7de",
+    land: "#e3e7e5",
+    focusLand: "#ebefed",
     border: "#ffffff",
     focusStroke: "#8d877b",
-    noData: "#dcd7cc",
+    noData: "#d8dedb",
     graticule: "#d9e3e8",
     neat: "none",
     refLabels: false,
@@ -116,14 +116,14 @@ const STYLE: Record<
     glow: true,
   },
   dots: {
-    paper: "#f6f1e7",
+    paper: "#ffffff",
     water: "#eaf0f1",
     sphere: "#eaf0f1",
-    land: "#cfc6b4",
-    focusLand: "#bfb49e",
+    land: "#c6cfcb",
+    focusLand: "#b2bdb8",
     border: "none",
     focusStroke: "none",
-    noData: "#ddd5c6",
+    noData: "#dce2df",
     graticule: "#dfe6e7",
     neat: "none",
     unitStroke: "none",
@@ -208,7 +208,7 @@ function num(v: unknown): number | null {
   return null;
 }
 
-/** Rough text width — good enough to size boxes without a DOM (works server-side and in PDF). */
+/** Rough text width, good enough to size boxes without a DOM (works server-side and in PDF). */
 const textW = (s: string, size: number, bold = false) => s.length * size * (bold ? 0.58 : 0.54);
 
 const isTop = (c: Corner) => c[0] === "t";
@@ -241,7 +241,7 @@ function wrapText(text: string, maxChars: number, maxLines = 2): string[] {
   return lines.filter(Boolean);
 }
 
-/** Largest 1·2·5 × 10ⁿ value not above x — for legend reference sizes. */
+/** Largest 1·2·5 × 10ⁿ value not above x, for legend reference sizes. */
 function niceFloor(x: number): number {
   if (!(x > 0)) return 0;
   const pow = Math.pow(10, Math.floor(Math.log10(x)));
@@ -419,7 +419,7 @@ function buildMap(
         label:
           classes!.colors.length === 1
             ? formatNumber(classes!.breaks[0], spec.data.valueFormat)
-            : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} – ${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
+            : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} to ${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
       }));
       if (hasNoData) rows.push({ color: T.noData, label: "No data", muted: true } as (typeof rows)[number]);
       const title = titleText("Value");
@@ -932,7 +932,7 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
   return out;
 }
 
-// Label typography by role — the conventions of a printed atlas: water in blue italic
+// Label typography by role, the conventions of a printed atlas: water in blue italic
 // serif, countries in spaced capitals, towns in a plain sans.
 const LABEL_STYLE: Record<MapLabel["role"], { fill: string; serif: boolean; italic?: boolean; weight?: number }> = {
   country: { fill: "#6a5446", serif: true, weight: 600 },
@@ -1228,7 +1228,7 @@ export function CartoMap({
         ))}
       </g>
 
-      {/* Neatline — a double rule on atlas styles, like a printed plate */}
+      {/* Neatline, a double rule on atlas styles, like a printed plate */}
       {T.neat !== "none" && <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="none" stroke={THEME.neat} strokeWidth={0.9 * k} />}
       {(m.style === "atlas" || m.style === "classic") && (
         <rect

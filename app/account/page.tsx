@@ -7,7 +7,7 @@ import { accountsEnabled, getCurrentUser } from "@/lib/supabase/server";
 import { listOwnJobs } from "@/lib/jobs";
 import { getUsage } from "@/lib/quota";
 
-export const metadata = { title: "My maps — CartoMapper" };
+export const metadata = { title: "My maps · CartoMapper" };
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
@@ -32,7 +32,7 @@ export default async function AccountPage() {
               <p className="mt-2 text-atlas-ink-2">{user.email}</p>
             </div>
             <div className="w-full max-w-xs rounded-xl border border-atlas-rule bg-atlas-card p-5 sm:w-auto sm:min-w-72">
-              <p className="text-xs font-semibold uppercase tracking-wider text-atlas-ink-2">New maps today</p>
+              <p className="text-xs font-semibold text-atlas-ink-2">New maps today</p>
               <p className="display mt-1 text-3xl font-semibold text-atlas-ink">
                 {usage.used} <span className="text-lg font-normal text-atlas-ink-2">of {usage.limit}</span>
               </p>

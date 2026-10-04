@@ -1,6 +1,6 @@
 /**
  * Industry question trees. Each industry has exactly 5 controlled questions
- * (dropdown / radio / multi-select — never free text; the free text lives in the
+ * (dropdown / radio / multi-select, never free text; the free text lives in the
  * separate "vibe" prompt). Answers are stored in `answers` jsonb keyed by question id.
  *
  * Consistent ids the cartographic engine relies on across every industry:
@@ -52,7 +52,7 @@ const SCOPE_STD: QuestionOption[] = [
 
 const SCOPE_INTL: QuestionOption[] = [
   { value: "global", label: "Global / multi-country" },
-  { value: "national", label: "Single country — national" },
+  { value: "national", label: "Single country, national" },
   { value: "subnational", label: "Sub-national / regional" },
   { value: "district", label: "District / community level" },
 ];
@@ -1254,7 +1254,7 @@ export const INDUSTRIES: Industry[] = [
   {
     id: "custom",
     name: "Custom / Other",
-    blurb: "Describe your own use case — we'll map it professionally.",
+    blurb: "Describe your own use case and we'll map it professionally.",
     custom: true,
     questions: [
       {

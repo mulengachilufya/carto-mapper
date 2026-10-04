@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { ForgotForm } from "@/components/auth/ForgotForm";
 
-export const metadata = { title: "Reset your password — CartoMapper" };
+export const metadata = { title: "Reset your password · CartoMapper" };
 
 export default function ForgotPasswordPage() {
   return (

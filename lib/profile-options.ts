@@ -1,5 +1,5 @@
 /**
- * What we ask at sign-up — kept short, so signing up takes seconds. Stored in the
+ * What we ask at sign-up, kept short, so signing up takes seconds. Stored in the
  * `profiles` table; values are stable keys so reports can depend on them.
  */
 export const COUNTRIES: string[] = [

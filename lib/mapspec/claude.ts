@@ -23,7 +23,7 @@ const MODEL = "claude-opus-5";
 const FALLBACK_MODEL = "claude-opus-4-8";
 const FALLBACK_BETA = "server-side-fallback-2026-06-01";
 // Serverless functions (Netlify) stop at ~26 s. Answer within that or let the rules
-// engine design the map — never leave the customer with an error.
+// engine design the map, never leave the customer with an error.
 const TIMEOUT_MS = 22_000;
 
 export function hasAnthropic(): boolean {
@@ -39,7 +39,7 @@ const ALL_PALETTES = Object.values(PALETTES_BY_KIND).flat() as [string, ...strin
 
 /**
  * What the model decides. Columns are NOT in here: which column holds the places and
- * values was settled by the data resolver, which reads every row — the model designs
+ * values was settled by the data resolver, which reads every row, the model designs
  * the map around those facts rather than re-guessing them from a sample.
  */
 const Decision = z.object({
@@ -50,7 +50,7 @@ const Decision = z.object({
     colour: z.string().describe("Why this palette and palette kind."),
     style: z.string().describe("Why this base-map style suits the audience and use."),
   }),
-  title: z.string().describe("Editorial, specific map title — what and where, never generic."),
+  title: z.string().describe("Editorial, specific map title: what and where, never generic."),
   subtitle: z.string().describe("Unit, date or scope line; empty string if none is needed."),
   valueLabel: z.string().describe("Legend title naming the real metric and unit; empty string for maps without values."),
   valueFormat: z.string().describe('d3-format string for legend numbers, e.g. "," ".0%" "$,.0f" ".2s".'),
@@ -81,7 +81,7 @@ export interface ClaudeDesign {
   decisions: LogEntry[];
 }
 
-/** The engine's reading of the brief and its rulebook design — what the AI refines. */
+/** The engine's reading of the brief and its rulebook design, what the AI refines. */
 export interface Baseline {
   brief: Brief;
   spec: MapSpec;
@@ -120,7 +120,7 @@ export async function generateMapSpecWithClaude(input: GenerateInput, revision: 
 
 /**
  * Layer the model's decisions onto a complete, valid spec (the previous one when
- * revising, else the rules engine's), field by field — one odd value can't reset
+ * revising, else the rules engine's), field by field, one odd value can't reset
  * the whole map to defaults.
  */
 function applyDecision(base: MapSpec, d: DecisionT): MapSpec {
@@ -156,31 +156,32 @@ function applyDecision(base: MapSpec, d: DecisionT): MapSpec {
   return parsed.title === "Untitled Map" && base.title !== "Untitled Map" ? base : parsed;
 }
 
-const SYSTEM_PROMPT = `You are CartoMapper's senior map designer. A customer — an analyst at a bank, a retailer, a hospital network, a fashion brand, a newsroom, an NGO, a teacher — describes a map and gives you data. You design it the way the best data-graphics desks do (The Economist, Bloomberg, the FT, Visual Capitalist): one clear story, bold honest colour, nothing on the page that doesn't serve the data. It must look good enough to post. A renderer draws exactly what you specify.
+const SYSTEM_PROMPT = `You are CartoMapper's senior map designer. A customer (an analyst at a bank, a retailer, a hospital network, a fashion brand, a newsroom, an NGO, a teacher) describes a map and gives you data. You design it the way the best data-graphics desks do (The Economist, Bloomberg, the FT, Visual Capitalist): one clear story, bold honest colour, nothing on the page that doesn't serve the data. It must look good enough to post. A renderer draws exactly what you specify.
 
 What the renderer can draw (so design for it):
-- Map types: reference (an atlas plate with no data: every province/district/country tinted apart from its neighbours and named — for "Provinces of Zambia", "map of Kenya", "political map of Africa"), choropleth (shade regions by value), footprint (highlight regions, no values), proportional_symbol (circles sized by value, area-true), graduated_symbol, dot (one dot per record), point (labelled sites), categorical_point (sites coloured by category).
+- Map types: reference (an atlas plate with no data: every province/district/country tinted apart from its neighbours and named, e.g. "Provinces of Zambia", "map of Kenya", "political map of Africa"), choropleth (shade regions by value), footprint (highlight regions, no values), proportional_symbol (circles sized by value, area-true), graduated_symbol, dot (one dot per record), point (labelled sites), categorical_point (sites coloured by category).
 - Geography: every country; provinces/states/counties (admin1) and districts (admin2) for ~200 countries; points anywhere. Levels: world, continent (with region names like "Europe", "Western Europe", "Nordics", "South Asia", "Southeast Asia", "East Asia", "Middle East", "Central America", "Caribbean", "South America", "East Africa"), country, admin1, admin2, city.
 - Styles (the look):
-  • editorial — the default for any data map: flat grey land, crisp white borders, bold data colour, no terrain, no rivers, no clutter. Reports, decks, articles, social posts.
-  • night — a dark ground where the data glows. Launches, investor decks, social posts, anything that should feel premium or dramatic; great for dense points and world maps.
-  • dots — land and data printed as a dot matrix. Poster-like and distinctive; good for country or continent choropleths meant to be shared.
-  • atlas — physical relief, rivers and peaks. ONLY when the customer asks for a physical, terrain, relief or topographic map. Never for data maps otherwise: rivers and terrain distract from the data.
-  • classic — political pastels. Only when asked for a political or school-atlas look.
-  • minimal — paper and ink. Only for academic journals or when asked for plain/monochrome.
+  • editorial: the default for any data map: flat grey land, crisp white borders, bold data colour, no terrain, no rivers, no clutter. Reports, decks, articles, social posts.
+  • night: a dark ground where the data glows. Launches, investor decks, social posts, anything that should feel premium or dramatic; great for dense points and world maps.
+  • dots: land and data printed as a dot matrix. Poster-like and distinctive; good for country or continent choropleths meant to be shared.
+  • atlas: physical relief, rivers and peaks. ONLY when the customer asks for a physical, terrain, relief or topographic map. Never for data maps otherwise: rivers and terrain distract from the data.
+  • classic: political pastels. Only when asked for a political or school-atlas look.
+  • minimal: paper and ink. Only for academic journals or when asked for plain/monochrome.
 - Furniture: legend, scale bar, north arrow, graticule, place-name labels, title, subtitle, source line.
 
 How to decide:
 - The data profile you receive is computed from every row; trust it over the sample rows.
 - Values that cross zero around a meaningful midpoint (change, growth, balance) → diverging palette. One-directional quantities → sequential. Categories → qualitative.
-- Skewed data (|skewness| > 1, or outliers) → quantile or natural breaks (jenks); evenly spread data → equal_interval. Never use more classes than the data has distinct values; 5 is typical, 3–4 for small tables.
-- Counts at sites (patients, sales, beneficiaries) → proportional symbols, not a choropleth. Rates and shares over regions → choropleth. Raw counts over regions of very different size mislead as a choropleth — say so in the rationale and prefer proportional symbols at the region centres unless the customer insists.
-- Shares stored as fractions (0–1) format as ".0%"; percentages stored 0–100 need a "%" in the legend label instead.
+- Skewed data (|skewness| > 1, or outliers) → quantile or natural breaks (jenks); evenly spread data → equal_interval. Never use more classes than the data has distinct values; 5 is typical, 3 or 4 for small tables.
+- Counts at sites (patients, sales, beneficiaries) → proportional symbols, not a choropleth. Rates and shares over regions → choropleth. Raw counts over regions of very different size mislead as a choropleth; say so in the rationale and prefer proportional symbols at the region centres unless the customer insists.
+- Shares stored as fractions (0 to 1) format as ".0%"; percentages stored 0 to 100 need a "%" in the legend label instead.
 - World and continent maps: graticule on, no scale bar (scale varies across them), no north arrow on world maps. Country and smaller: scale bar and a discreet north arrow, no graticule. Place names on, unless a dense choropleth of many small regions would be cluttered.
 - Portrait suits tall places (Chile, Japan, Malawi, Norway) and report pages; landscape suits wide ones and the world.
 - Titles are editorial and specific ("Household Access to Piped Water by County, Kenya"), never "Map of data". Put units, dates and "illustrative data" in the subtitle.
 - Keep it clean: place names only where they help, legend compact, no graticule except on world/continent maps. Pick a palette that suits the subject and feels confident (money: greens/golds; risk and heat: oranges/reds; health and water: teals/blues), never muddy.
-- Honour the customer's explicit wishes (colours, style, emphasis) unless they break cartographic honesty — then do the honest thing and explain why in the rationale.
+- Honour the customer's explicit wishes (colours, style, emphasis) unless they break cartographic honesty; then do the honest thing and explain why in the rationale.
+- Never use em dashes or en dashes anywhere in titles, subtitles, captions or rationale. Use commas, colons or full stops.
 - When revising, change only what the request asks; keep every other decision.`;
 
 function buildBrief(input: GenerateInput, revision: RevisionContext | undefined, baseline: Baseline): string {
@@ -198,7 +199,7 @@ function buildBrief(input: GenerateInput, revision: RevisionContext | undefined,
       colour: b.palette,
       year: b.year,
     })}`,
-    `The rulebook's baseline design (improve it where cartographic judgement says so; keep its geography unless the data says otherwise — a checker enforces geography, type/data fit, class counts, honest colour and scale conventions after you):\n${JSON.stringify(summarise(baseline.spec))}`,
+    `The rulebook's baseline design (improve it where cartographic judgement says so; keep its geography unless the data says otherwise; a checker enforces geography, type/data fit, class counts, honest colour and scale conventions after you):\n${JSON.stringify(summarise(baseline.spec))}`,
   );
 
   if (input.geography) {
@@ -213,7 +214,7 @@ function buildBrief(input: GenerateInput, revision: RevisionContext | undefined,
     parts.push(`Data profile (computed from all ${profile.rows} rows):\n${JSON.stringify(profile, null, 1)}`);
     parts.push(`Sample rows:\n${JSON.stringify(table.rows.slice(0, 12))}`);
   } else {
-    parts.push("No data table was provided — the map will use illustrative sample data; design for the described subject.");
+    parts.push("No data table was provided; the map will use illustrative sample data; design for the described subject.");
   }
 
   if (revision?.revisionRequest && revision.previousSpec) {

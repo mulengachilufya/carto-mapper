@@ -142,7 +142,7 @@ function choroplethSample(geo: FeatureCollection, industry: string, region?: str
   };
 }
 
-/** A smooth 0–1 surface over lon/lat: a handful of broad Gaussian bumps. */
+/** A smooth 0 to 1 surface over lon/lat: a handful of broad Gaussian bumps. */
 function smoothField(): (lon: number, lat: number) => number {
   const bumps = Array.from({ length: 5 }, () => ({
     lon: -150 + Math.random() * 300,

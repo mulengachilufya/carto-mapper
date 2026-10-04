@@ -54,7 +54,7 @@ export function Footer() {
             ))}
           </nav>
         </div>
-        <div className="mt-12 flex flex-col gap-3 border-t border-atlas-paper/10 pt-6 font-mono text-[11px] text-atlas-paper/45 sm:flex-row sm:justify-between">
+        <div className="mt-12 flex flex-col gap-3 border-t border-atlas-paper/10 pt-6 tabular-nums text-[11px] text-atlas-paper/45 sm:flex-row sm:justify-between">
           <p>
             Boundaries © Natural Earth · Subdivisions © geoBoundaries (CC BY 4.0) · Terrain © Mapzen Terrain Tiles
           </p>

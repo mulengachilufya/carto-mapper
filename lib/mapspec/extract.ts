@@ -58,13 +58,13 @@ interface Extracted {
   summary?: string;
 }
 
-const SYSTEM = `You read a customer's request and whatever they attached — reports, articles, spreadsheets exported to PDF, photos of printed tables, screenshots of old maps — and pull out the places and numbers needed to draw ONE map.
+const SYSTEM = `You read a customer's request and whatever they attached (reports, articles, spreadsheets exported to PDF, photos of printed tables, screenshots of old maps) and pull out the places and numbers needed to draw ONE map.
 
 - List every place the map should show, with its name as the source writes it (keep official names: "Copperbelt Province", "Nairobi County", "Kano State").
 - Values: use only numbers stated in the source for that place, in the source's units; if a place has no number, leave value null. Never estimate or invent data.
 - Categories: a short label when the source classifies places (e.g. "Hospital", "Planned", "Phase 2").
 - Coordinates: our system already knows countries, provinces, districts and ~7,000 towns by name, so leave lat/lon null for those. Give approximate lat/lon only for small or specific sites it could not find by name (a village, a borehole, a named farm).
-- Region: the overall area — the country the places are in, a region such as "East Africa", or "World".
+- Region: the overall area, the country the places are in, or a region such as "East Africa", or "World".
 - suggestedMapType: values per country/region → choropleth; regions to highlight without values → footprint; sites with a count → proportional_symbol; sites by type → categorical_point; just locations → point.
 - If the attachments contain no places, return an empty places list and say so in the summary.`;
 

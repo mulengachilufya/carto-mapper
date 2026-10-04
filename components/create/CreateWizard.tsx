@@ -222,7 +222,7 @@ export function CreateWizard() {
 
       {usage && (
         <p className="mx-auto mt-5 flex max-w-2xl items-center justify-center gap-2 text-center text-sm text-muted">
-          <span className="font-mono text-xs">
+          <span className="tabular-nums text-xs">
             {usage.used}/{usage.limit}
           </span>
           free maps used today · changes and downloads don&apos;t count ·{" "}
@@ -234,7 +234,7 @@ export function CreateWizard() {
 
       {atLimit && !error && (
         <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-          You&apos;ve made your {usage?.limit} free maps for today. A new one frees up 24 hours after each map — meanwhile you
+          You&apos;ve made your {usage?.limit} free maps for today. A new one frees up 24 hours after each map. Meanwhile you
           can open, change and download the maps you&apos;ve made from <a href="/account" className="underline">My maps</a>.
         </p>
       )}

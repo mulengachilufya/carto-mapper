@@ -4,7 +4,7 @@ import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from
 
 export interface CountryProps {
   name: string;
-  /** 0–4: a colour index no neighbouring country shares (political-atlas colouring). */
+  /** 0 to 4: a colour index no neighbouring country shares (political-atlas colouring). */
   mapcolor?: number;
 }
 export type CountryFeature = Feature<Geometry, CountryProps>;
@@ -25,7 +25,7 @@ export async function loadCountries(
 }
 
 /**
- * Countries as GeoJSON, each with a `mapcolor` no neighbour shares — greedy graph
+ * Countries as GeoJSON, each with a `mapcolor` no neighbour shares, greedy graph
  * colouring over shared borders, most-connected countries first.
  */
 export function countriesFromTopology(topo: {
@@ -37,7 +37,7 @@ export function countriesFromTopology(topo: {
 }
 
 /**
- * Give each unit a colour index (0–4) that differs from every neighbour's — the
+ * Give each unit a colour index (0 to 4) that differs from every neighbour's, the
  * political-atlas tint. Greedy, most-connected first.
  */
 function colourNeighbours(fc: FeatureCollection, geometries: unknown[]) {
@@ -119,7 +119,7 @@ export function matchFeature(
   if (index.has(n)) return index.get(n);
   const alias = ALIASES[n];
   if (alias && index.has(alias)) return index.get(alias);
-  // No fuzzy "contains" matching — it mis-assigns (e.g. "Niger" → "Nigeria",
+  // No fuzzy "contains" matching, it mis-assigns (e.g. "Niger" → "Nigeria",
   // "Sudan" → "South Sudan"). A miss is safe (renders as "no data"); a wrong
   // match silently paints your value onto the wrong country.
   return undefined;
