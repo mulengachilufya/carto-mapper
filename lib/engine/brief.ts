@@ -113,7 +113,9 @@ export function readBrief(text: string, opts: { hasData?: boolean } = {}): Brief
   const theme = THEMES.find((th) => th.re.test(t))?.theme ?? null;
   const style = STYLE_WORDS.find((s) => s.re.test(t))?.style ?? theme?.style ?? null;
   const palette = COLOUR_WORDS.find((c) => c.re.test(t))?.palette ?? null;
-  const year = t.match(/\b(19[5-9]\d|20[0-4]\d)\b/)?.[1] ?? null;
+  const ym = t.match(/\b(since )?(19[5-9]\d|20[0-4]\d)\b/);
+  // "since 1990" is a baseline, not the date of the data.
+  const year = ym ? (ym[1] ? `Since ${ym[2]}` : ym[2]) : null;
   const orientation = /\bportrait\b|\btall\b|\bvertical\b/.test(t) ? "portrait" : /\blandscape\b|\bwide\b|\bslide\b|\bpresentation\b|\bdeck\b/.test(t) ? "landscape" : null;
   const illustrative = /\billustrative\b|\bsample data\b|\bexample data\b|\bdummy\b|\bfake data\b/.test(t);
 

@@ -74,7 +74,11 @@ export interface Theme {
 /** Subjects → how atlases conventionally colour them. First match wins, so specific before general. */
 export const THEMES: { re: RegExp; theme: Theme }[] = [
   { re: /population density|people per (?:km|sq)|density/, theme: { id: "density", label: "Population Density", unit: "people per km²", palette: "YlOrRd", format: ",.0f" } },
-  { re: /population|inhabitants|residents|people\b/, theme: { id: "population", label: "Population", palette: "YlOrBr", format: ".3s", count: true } },
+  { re: /internet|broadband|\b[345]g\b|mobile coverage|network coverage|connectivity|smartphone/, theme: { id: "digital", label: "Internet Use", unit: "%", palette: "PuBu", format: ".0f" } },
+  { re: /inflation|consumer prices|\bcpi\b|cost of living/, theme: { id: "inflation", label: "Inflation Rate", unit: "%", palette: "OrRd", format: ".1f" } },
+  { re: /mobile money|financial inclusion|bank accounts|accounts per|unbanked/, theme: { id: "inclusion", label: "Account Ownership", palette: "BuGn", format: ".0f" } },
+  { re: /deposits|sales|revenue|turnover|loans|portfolio/, theme: { id: "business", label: "Sales", palette: "Greens", format: ",", count: true } },
+  { re: /population|inhabitants|residents/, theme: { id: "population", label: "Population", palette: "YlOrBr", format: ".3s", count: true } },
   { re: /rain(?:fall)?|precipitation/, theme: { id: "rainfall", label: "Annual Rainfall", unit: "mm", palette: "GnBu", format: ",.0f" } },
   { re: /temperature|heat|warm/, theme: { id: "temperature", label: "Mean Temperature", unit: "°C", palette: "YlOrRd", diverging: "RdYlBu", format: ".1f" } },
   { re: /drought|aridity/, theme: { id: "drought", label: "Drought Severity", palette: "YlOrBr", diverging: "BrBG" } },
@@ -92,7 +96,7 @@ export const THEMES: { re: RegExp; theme: Theme }[] = [
   { re: /elections?|votes?|voting|turnout/, theme: { id: "election", label: "Turnout", unit: "%", palette: "Purples", format: ".0f" } },
   { re: /tourism|tourists?|visitors?/, theme: { id: "tourism", label: "Visitors", palette: "PuRd", format: ".3s", count: true } },
   { re: /energy|electricity|electrification|solar/, theme: { id: "energy", label: "Electricity Access", unit: "%", palette: "YlOrBr", format: ".0f" } },
-  { re: /growth|change|increase|decrease|trend|gain|loss|swing|difference/, theme: { id: "change", label: "Change", unit: "%", palette: "Blues", diverging: "RdBu", format: "+.1f" } },
+  { re: /growth|change|increase|decrease|trend|gain|loss|swing|difference|anomaly/, theme: { id: "change", label: "Change", unit: "%", palette: "Blues", diverging: "RdBu", format: "+.1f" } },
   { re: /elevation|altitude|terrain|relief|mountains?|topograph|physical/, theme: { id: "physical", label: "Elevation", palette: "YlGn", style: "atlas" } },
 ];
 
