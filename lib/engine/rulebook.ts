@@ -30,6 +30,14 @@ export interface Design {
   rows?: Record<string, unknown>[];
 }
 
+/** Title case for a heading: units and parentheses untouched, small words lower-case. */
+const titleOf = (h: string) => {
+  const clean = h.replace(/\s*\([^)]*\)\s*/g, " ").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+  return clean
+    .split(" ")
+    .map((w, i) => (i > 0 && /^(of|and|by|in|the|per|for|a|an|to|on|at|with)$/i.test(w) ? w.toLowerCase() : /^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+};
 const humanize = (h: string) =>
   h.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 const GENERIC = /^(value|values|count|number|metric|amount|total|data|column \d+)$/i;
@@ -122,18 +130,23 @@ export function design(f: Facts): Design {
 
   // ── S. Style: what you asked for, then what the subject and map suit ──
   let style: MapStyle;
+  const LOOK: Record<MapStyle, string> = {
+    editorial: "an editorial, newsroom-graphic look",
+    night: "a dark, glowing look",
+    dots: "a dot-matrix look",
+    atlas: "a physical atlas look",
+    classic: "a political atlas look",
+    minimal: "a minimal paper-and-ink look",
+  };
   if (brief.style) {
     style = brief.style;
-    log("S1", "Style", cap(style), `You asked for a ${brief.style === "atlas" ? "physical" : brief.style === "classic" ? "political" : "minimal"} look.`, "brief");
+    log("S1", "Style", cap(style), `You asked for ${LOOK[style]}.`, "brief");
   } else if (mapType === "reference") {
-    style = level === "world" || level === "continent" ? "classic" : "atlas";
-    log("S2", "Style", cap(style), style === "atlas" ? "A school-atlas plate: terrain relief under softly tinted units, rivers, lakes and towns." : "A political atlas plate: pastel countries with water-lined coasts.", "rules");
-  } else if (mapType === "choropleth") {
-    style = level === "admin2" ? "minimal" : level === "world" || level === "continent" ? "classic" : "atlas";
-    log("S3", "Style", cap(style), style === "minimal" ? "Many small districts: paper and ink keep the data the only colour on the page." : style === "classic" ? "At world and continent scale the political atlas base frames the colours cleanly." : "Relief shading under the colours keeps the land real without changing the classes.", "rules");
+    style = "editorial";
+    log("S2", "Style", "Editorial", "A clean plate: every unit softly tinted and named, no terrain or rivers competing with the names.", "rules");
   } else {
-    style = "atlas";
-    log("S4", "Style", "Atlas", "Sites read best on real terrain with rivers and towns for orientation.", "rules");
+    style = "editorial";
+    log("S3", "Style", "Editorial", "Flat land and crisp borders keep the data the only thing on the page — no terrain, no rivers.", "rules");
   }
 
   // ── C. Classification: from the numbers themselves ──
@@ -176,6 +189,8 @@ export function design(f: Facts): Design {
     why = "The colour you asked for, as a light-to-dark ramp.";
     by = "brief";
   }
+  // ColorBrewer's red–blue ramps run red→blue; temperature reads warm-is-red, so flip them.
+  const reverse = brief.theme?.id === "temperature" && (palette === "RdYlBu" || palette === "RdBu");
   if (mapType === "choropleth" || mapType === "footprint" || mapType === "proportional_symbol" || mapType === "categorical_point")
     log("K1", "Colour", palette, why, by);
 
@@ -207,14 +222,21 @@ export function design(f: Facts): Design {
   // ── N. Words: an atlas title, a subtitle that carries the units and date ──
   const place = region && region !== "World" ? region : undefined;
   const unitSingular = brief.units && brief.units.level !== "points" ? brief.units.singular : level === "admin2" ? "District" : level === "admin1" ? "Province" : "Country";
-  const metric = roles.valueField && !GENERIC.test(roles.valueField) ? humanize(roles.valueField) : brief.theme?.label;
+  const metric = roles.valueField && !GENERIC.test(roles.valueField) ? titleOf(roles.valueField) : brief.theme?.label;
+  // "Cases per 1,000" says nothing on its own; the brief says which disease.
+  const disease = brief.text.match(/\b(malaria|cholera|measles|dengue|mpox|ebola|tuberculosis|tb|hiv|covid(?:-19)?|typhoid|polio)\b/i)?.[1];
+  const metricT = metric && disease && !new RegExp(disease, "i").test(metric) ? `${disease.length <= 3 ? disease.toUpperCase() : cap(disease.toLowerCase())} ${metric}` : metric;
+  const subject = subjectOf(brief);
   let title: string;
   if (f.userTitle) title = f.userTitle;
   else if (mapType === "reference") title = referenceTitle(brief) ?? (place ? place : "The World: Political");
   else if (mapType === "footprint") title = place && level !== "world" ? `Where We Work in ${the(place)}` : "Where We Work";
-  else if (mapType === "choropleth") title = `${metric ?? "Indicator"} by ${unitSingular}${place ? `, ${place}` : ""}`;
-  else if (mapType === "point" || mapType === "categorical_point") title = `${brief.units?.level === "points" ? subjectOf(brief) : metric ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
-  else title = `${metric ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
+  else if (mapType === "choropleth") title = `${metricT ?? "Indicator"} by ${unitSingular}${place ? `, ${place}` : ""}`;
+  else if (mapType === "categorical_point")
+    title = `${subject ?? "Sites"}${place ? ` in ${the(place)}` : ""}${roles.categoryField ? ` by ${titleOf(roles.categoryField)}` : ""}`;
+  else if (mapType === "point") title = `${subject ?? metricT ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
+  else if (subject && metric) title = `${subject} by ${metric}${place ? `, ${place}` : ""}`;
+  else title = `${metricT ?? subject ?? "Sites"}${place ? ` in ${the(place)}` : ""}`;
   const subtitleParts = [
     rows && mapType === "footprint" ? list(brief.countries) : null,
     brief.theme?.unit && mapType !== "reference" && !roles.valueField ? brief.theme.unit : null,
@@ -248,7 +270,7 @@ export function design(f: Facts): Design {
       valueFormat: v?.looksLikeShare === "fraction" ? ".0%" : brief.theme?.format ?? ",",
       illustrative: illustrative || undefined,
     },
-    symbology: { palette, paletteKind: kindOf(palette), classes, classification, reverse: false, minRadius: 2, maxRadius: 26 },
+    symbology: { palette, paletteKind: kindOf(palette), classes, classification, reverse, minRadius: 2, maxRadius: 26 },
     furniture,
     page: { size: "A4", orientation },
     decisions,
@@ -256,9 +278,15 @@ export function design(f: Facts): Design {
   return { spec, decisions, rows };
 }
 
-function subjectOf(b: Brief): string {
-  const m = b.text.match(/\b(health facilities|facilities|clinics|hospitals|schools|offices|boreholes|wells|mines|projects|stations|branches|stores|camps|sites|locations)\b/i);
-  return m ? humanize(m[1]) : "Sites";
+/** What the sites are, in the brief's own words ("Refugee Settlements", "Coffee Cooperatives"). */
+function subjectOf(b: Brief): string | null {
+  const nouns =
+    "health facilities|facilities|clinics|hospitals|health posts|schools|universities|offices|branches|stores|shops|outlets|depots|warehouses|boreholes|wells|water points|mines|mining operations|operations|projects|stations|camps|settlements|cooperatives|farms|plants|sites|locations|hubs|agents|churches|congregations|hotels|lodges|parks|venues|clubs|towers";
+  const m = b.text.match(new RegExp(`\\b((?:[a-z][a-z-]+\\s){0,2}?)(${nouns})\\b`, "i"));
+  if (!m) return null;
+  // Keep a describing word or two ("refugee settlements", "coffee cooperatives"), never filler.
+  const lead = m[1].trim().split(/\s+/).filter((w) => w && !/^(our|the|all|my|new|proposed|of|in|by|and|a|an)$/i.test(w));
+  return titleOf([...lead, m[2]].join(" "));
 }
 
 function describeGeo(level: GeoLevel, region?: string): string {

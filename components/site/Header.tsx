@@ -3,7 +3,7 @@ import { CompassMark } from "./CompassMark";
 import { AccountNav } from "./AccountNav";
 
 const NAV = [
-  { href: "/atlas", label: "The Atlas" },
+  { href: "/atlas", label: "Gallery" },
   { href: "/how-it-works#styles", label: "Map styles" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/how-it-works#who", label: "Who it's for" },

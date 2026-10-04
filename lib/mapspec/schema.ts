@@ -32,8 +32,11 @@ export const GEO_LEVELS = [
  *  - atlas    — a physical school-atlas page: hypsometric relief, sea depths, rivers, lakes
  *  - classic  — a political atlas page: pastel countries, water-lined coasts, rivers
  *  - minimal  — quiet paper-and-ink, for reports where the data must be the only colour
+ *  - editorial — flat, bold, newsroom-graphic: grey land, crisp white borders, no terrain or rivers
+ *  - night    — a dark ground where the data glows, for launches, decks and social posts
+ *  - dots     — dot-matrix: land and data drawn as a grid of dots, poster-like
  */
-export const MAP_STYLES = ["atlas", "classic", "minimal"] as const;
+export const MAP_STYLES = ["editorial", "night", "dots", "atlas", "classic", "minimal"] as const;
 
 export const PALETTE_KINDS = ["sequential", "diverging", "qualitative"] as const;
 export const CLASSIFICATIONS = ["quantile", "equal_interval", "jenks"] as const;
@@ -71,7 +74,7 @@ export const MapSpecSchema = z.object({
   source: z.string().optional(),
 
   mapType: z.enum(MAP_TYPES).default("choropleth"),
-  style: z.enum(MAP_STYLES).default("atlas"),
+  style: z.enum(MAP_STYLES).default("editorial"),
 
   geography: z
     .object({

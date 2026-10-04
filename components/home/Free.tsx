@@ -3,7 +3,7 @@ import { SectionHeading } from "./SectionHeading";
 import { DAILY_MAP_LIMIT } from "@/lib/quota-rules";
 
 const INCLUDED = [
-  ["Every style", "Atlas relief, classic political, minimal ink"],
+  ["Every style", "Editorial, night, dot-matrix, atlas, classic and minimal"],
   ["Every geography", "World, continents, countries, provinces, districts, points"],
   ["Print-ready files", "Vector PDF at A4 or Letter, SVG for designers — no watermark"],
   ["The AI cartographer", "Reads your data and reports, explains every design decision"],
@@ -49,9 +49,9 @@ export function Free() {
                   className="aspect-[1.414] rounded-sm border border-atlas-rule"
                   style={{
                     background: [
-                      "linear-gradient(135deg,#a9c9a0,#e8d9a6 55%,#c79a6b)",
-                      "linear-gradient(135deg,#bcd6ea,#f3d9b1 60%,#cfe0b4)",
-                      "linear-gradient(135deg,#f5f1e8,#d9d3c4)",
+                      "radial-gradient(circle at 60% 45%,#fff1c2 0,#ff9a3c 16%,#17221f 52%)",
+                      "linear-gradient(135deg,#e3dfd6 0 40%,#c0614f 40% 68%,#8b2e26 68%)",
+                      "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/6px 6px,#f6f1e7",
                     ][i % 3],
                   }}
                 />

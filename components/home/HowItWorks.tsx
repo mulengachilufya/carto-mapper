@@ -29,7 +29,7 @@ const DECISIONS = [
   ["Geography", "Country, province, district or points"],
   ["Classes", "Quantile, equal interval or natural breaks"],
   ["Colour", "ColorBrewer ramps matched to the data"],
-  ["Reference", "Relief, rivers, cities, seas, peaks"],
+  ["Look", "Editorial, night, dots — or terrain on request"],
   ["Layout", "Legend placed where it hides nothing"],
 ];
 

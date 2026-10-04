@@ -65,8 +65,71 @@ const STYLE: Record<
     pastels?: string[];
     /** Neighbours over relief get a pale wash so the focus country reads first. */
     reliefWash?: string;
+    /** Ink for title, legend, labels and furniture (dark styles flip these). */
+    ink?: string;
+    muted?: string;
+    panel?: string;
+    panelBorder?: string;
+    /** Neatline colour; "none" for full-bleed styles. */
+    neat?: string;
+    unitStroke?: string;
+    symbolStroke?: string;
+    /** Atlas reference labels (seas, peaks, towns). Off for the graphic styles. */
+    refLabels?: boolean;
+    /** Data glows (night). */
+    glow?: boolean;
+    /** Land and data drawn as a dot matrix. */
+    dots?: boolean;
   }
 > = {
+  editorial: {
+    paper: "#faf8f4",
+    water: "#e8f0f4",
+    sphere: "#e8f0f4",
+    land: "#e3dfd6",
+    focusLand: "#ebe7de",
+    border: "#ffffff",
+    focusStroke: "#8d877b",
+    noData: "#dcd7cc",
+    graticule: "#d9e3e8",
+    neat: "none",
+    refLabels: false,
+  },
+  night: {
+    paper: "#0b1412",
+    water: "#0c1a24",
+    sphere: "#0c1a24",
+    land: "#17221f",
+    focusLand: "#1d2b27",
+    border: "#0b1412",
+    focusStroke: "#3f5d54",
+    noData: "#26312d",
+    graticule: "#18293a",
+    ink: "#f1efe8",
+    muted: "#9fb0aa",
+    panel: "#101c19",
+    panelBorder: "#2a3a35",
+    neat: "none",
+    unitStroke: "#0b1412",
+    symbolStroke: "#0b1412",
+    refLabels: false,
+    glow: true,
+  },
+  dots: {
+    paper: "#f6f1e7",
+    water: "#eaf0f1",
+    sphere: "#eaf0f1",
+    land: "#cfc6b4",
+    focusLand: "#bfb49e",
+    border: "none",
+    focusStroke: "none",
+    noData: "#ddd5c6",
+    graticule: "#dfe6e7",
+    neat: "none",
+    unitStroke: "none",
+    refLabels: false,
+    dots: true,
+  },
   minimal: {
     paper: THEME.paper,
     water: THEME.water,
@@ -298,10 +361,20 @@ function buildMap(
   let classes: { breaks: number[]; colors: string[] } | null = null;
   if (isChoropleth) {
     const br = classify([...valueByKey.values()], spec.symbology.classification, spec.symbology.classes);
-    classes = {
-      breaks: br.breaks,
-      colors: getPaletteColors(spec.symbology.palette, br.classes, spec.symbology.reverse).slice(0, br.classes),
-    };
+    let colors = getPaletteColors(spec.symbology.palette, br.classes, spec.symbology.reverse).slice(0, br.classes);
+    // Dots on paper: the palest shades disappear, so start the ramp two steps in.
+    if (T.dots && spec.symbology.paletteKind !== "diverging" && !spec.symbology.reverse)
+      colors = getPaletteColors(spec.symbology.palette, br.classes + 2, false).slice(2, br.classes + 2);
+    if (T.glow && spec.symbology.paletteKind !== "diverging" && colors.length > 1) {
+      // On a dark ground light-to-dark ramps read backwards; run dim → vivid → glowing instead.
+      const vivid = getPaletteColors(spec.symbology.palette, 7, spec.symbology.reverse)[4];
+      const n = colors.length;
+      colors = colors.map((_, i) => {
+        const t = (i + 1) / n;
+        return t < 0.85 ? mixHex(T.land, vivid, 0.3 + 0.75 * t) : mixHex(vivid, "#fff6e0", 0.45);
+      });
+    }
+    classes = { breaks: br.breaks, colors };
   }
   const colorFor = (v: number | undefined) =>
     v === undefined || !classes ? T.noData : classes.colors[classIndex(v, classes.breaks)] ?? T.noData;
@@ -322,7 +395,7 @@ function buildMap(
   );
   const colorForCat = (c?: string) => catColors[Math.max(0, cats.indexOf(c || "Other")) % catColors.length];
   const seq = getPaletteColors(spec.symbology.palette, 7, spec.symbology.reverse);
-  const symbolFill = spec.symbology.paletteKind === "qualitative" ? seq[0] : seq[5];
+  const symbolFill = spec.symbology.paletteKind === "qualitative" ? seq[0] : T.glow ? seq[3] : seq[5];
   // The user's own sites must out-rank the reference towns on atlas styles.
   const pointR = spec.mapType === "dot" ? 2.6 * k : (spec.style === "minimal" ? 4.2 : 5.4) * k;
   const radiusOf = (v: number) => (proportional ? Math.max(minR, rScale(Math.abs(v))) : pointR);
@@ -717,7 +790,7 @@ function buildMap(
     return { x, y: l.y - 8.5 * k * 0.9, w, h: 8.5 * k * 1.2 };
   });
   const atlasLabels: MapLabel[] =
-    style !== "minimal" && f.labels
+    style !== "minimal" && T.refLabels !== false && f.labels
       ? placeAtlasLabels({
           projection,
           frame,
@@ -880,6 +953,8 @@ const REF_PASTELS = ["#f3d9a4", "#cfe2b0", "#f2c7c0", "#d8cfe8", "#f5eaa6"];
 function unitName(name: string | undefined): string {
   return String(name ?? "")
     .replace(/\s+(province|region|district|state|county|governorate|prefecture|department|oblast|municipality)$/i, "")
+    // "Département de l'Ouest" → "Ouest", "Provincia de Buenos Aires" → "Buenos Aires".
+    .replace(/^(?:département|departamento|provincia|province|région|región)\s+(?:de la |de l'|du |des |de |d')?/i, "")
     .trim();
 }
 
@@ -951,7 +1026,7 @@ export function CartoMap({
   className,
   forPdf,
 }: Props) {
-  const layers = useAtlasLayers(spec.style !== "minimal", atlas);
+  const layers = useAtlasLayers(spec.style === "atlas" || spec.style === "classic", atlas);
   const m = useMemo(
     () => buildMap(spec, data, geo, width, height, subdivisions, layers),
     [spec, data, geo, width, height, subdivisions, layers],
@@ -1001,6 +1076,12 @@ export function CartoMap({
   const clipId = `cm-clip-${id}`;
   const dataClipId = `cm-data-${id}-${m.units.filter((u) => u.data).length}-${m.regions.length}`;
   const dataUnits = [...m.units.filter((u) => u.data), ...m.regions];
+  const c: Ink = { ink: T.ink ?? THEME.ink, muted: T.muted ?? THEME.muted, panel: T.panel ?? THEME.panel, panelBorder: T.panelBorder ?? THEME.panelBorder, paper: T.paper };
+  const dark = Boolean(T.ink);
+  // Dot-matrix style: every fill becomes a grid of dots in that colour.
+  const dotColors = T.dots ? Array.from(new Set([...m.units.map((u) => u.fill), ...m.regions.map((u) => u.fill)].filter((f) => f && f !== "none"))) : [];
+  const dotted = (fill: string | undefined) => (T.dots && fill && fill !== "none" ? `url(#cm-dot-${id}-${dotColors.indexOf(fill)})` : fill);
+  const dotStep = 5.6 * k;
   const img = (href: string) => (
     <image
       href={href}
@@ -1033,6 +1114,20 @@ export function CartoMap({
             <path d={m.spherePath} />
           </clipPath>
         )}
+        {T.glow && (
+          <filter id={`cm-glow-${id}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation={2.6 * k} result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        )}
+        {dotColors.map((col, i) => (
+          <pattern key={col} id={`cm-dot-${id}-${i}`} width={dotStep} height={dotStep} patternUnits="userSpaceOnUse">
+            <circle cx={dotStep / 2} cy={dotStep / 2} r={dotStep * 0.36} fill={col} />
+          </pattern>
+        ))}
         {images?.shade && m.style === "atlas" && dataUnits.length > 0 && (
           <clipPath id={dataClipId}>
             {dataUnits.map((u, i) => (
@@ -1059,16 +1154,16 @@ export function CartoMap({
           <path
             key={`u${i}`}
             d={u.d}
-            fill={hasRelief ? u.reliefFill : u.fill}
-            stroke={u.stroke}
-            strokeWidth={(m.style === "minimal" ? 0.45 : 0.6) * k}
+            fill={hasRelief ? u.reliefFill : dotted(u.fill)}
+            stroke={T.dots ? "none" : u.stroke}
+            strokeWidth={(m.style === "minimal" ? 0.45 : m.style === "editorial" ? 0.9 : 0.6) * k}
             strokeLinejoin="round"
           >
             <title>{u.name}</title>
           </path>
         ))}
         {m.regions.map((u, i) => (
-          <path key={`r${i}`} d={u.d} fill={hasRelief ? u.reliefFill : u.fill} stroke={THEME.unitStroke} strokeWidth={0.4 * k} strokeLinejoin="round">
+          <path key={`r${i}`} d={u.d} fill={hasRelief ? u.reliefFill : dotted(u.fill)} stroke={T.unitStroke ?? THEME.unitStroke} strokeWidth={(m.style === "editorial" ? 0.8 : 0.4) * k} strokeLinejoin="round">
             <title>{u.name}</title>
           </path>
         ))}
@@ -1091,7 +1186,7 @@ export function CartoMap({
           <path
             d={m.provinceLines}
             fill="none"
-            stroke={m.provinceLineStyle === "over-districts" ? THEME.unitStroke : m.style === "minimal" ? THEME.contextStroke : T.border}
+            stroke={m.provinceLineStyle === "over-districts" ? T.unitStroke ?? THEME.unitStroke : m.style === "minimal" ? THEME.contextStroke : dark ? T.focusStroke : T.dots ? "#a99d86" : T.border}
             strokeWidth={(m.provinceLineStyle === "over-districts" ? 1.3 : 0.6) * k}
             strokeDasharray={m.style !== "minimal" && m.provinceLineStyle === "context" ? `${2.2 * k} ${1.6 * k}` : undefined}
             strokeOpacity={m.style === "minimal" ? 1 : 0.8}
@@ -1099,9 +1194,10 @@ export function CartoMap({
           />
         )}
         {m.focusPath && (
-          <path d={m.focusPath} fill="none" stroke={T.focusStroke} strokeWidth={(m.style === "minimal" ? 1.1 : 1.4) * k} strokeLinejoin="round" />
+          T.focusStroke !== "none" && <path d={m.focusPath} fill="none" stroke={T.focusStroke} strokeWidth={(m.style === "minimal" ? 1.1 : 1.4) * k} strokeLinejoin="round" />
         )}
-        {m.isWorld && <path d={m.spherePath} fill="none" stroke={THEME.muted} strokeWidth={0.6 * k} />}
+        {m.isWorld && !T.dots && <path d={m.spherePath} fill="none" stroke={dark ? T.graticule : THEME.muted} strokeWidth={0.6 * k} />}
+        <g filter={T.glow ? `url(#cm-glow-${id})` : undefined}>
         {m.symbols.map((s, i) => (
           <circle
             key={`s${i}`}
@@ -1110,21 +1206,22 @@ export function CartoMap({
             r={s.r}
             fill={s.fill}
             fillOpacity={s.r > 6 * k ? 0.78 : 0.95}
-            stroke={THEME.symbolStroke}
-            strokeWidth={(m.style === "minimal" ? 0.7 : 1.4) * k}
+            stroke={T.symbolStroke ?? THEME.symbolStroke}
+            strokeWidth={(m.style === "minimal" ? 0.7 : T.glow ? 0.6 : 1.4) * k}
           >
             {s.name && <title>{s.name}</title>}
           </circle>
         ))}
+        </g>
         {m.atlasLabels.map((l, i) => (
-          <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} />
+          <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} dark={dark} />
         ))}
         {m.labels.map((l, i) => (
           <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }} fontWeight={600}>
             <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={T.paper} strokeWidth={2.6 * k} strokeLinejoin="round" strokeOpacity={0.9}>
               {l.text}
             </text>
-            <text x={l.x} y={l.y} textAnchor={l.anchor} fill={THEME.ink}>
+            <text x={l.x} y={l.y} textAnchor={l.anchor} fill={c.ink}>
               {l.text}
             </text>
           </g>
@@ -1132,8 +1229,8 @@ export function CartoMap({
       </g>
 
       {/* Neatline — a double rule on atlas styles, like a printed plate */}
-      <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="none" stroke={THEME.neat} strokeWidth={0.9 * k} />
-      {m.style !== "minimal" && (
+      {T.neat !== "none" && <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} fill="none" stroke={THEME.neat} strokeWidth={0.9 * k} />}
+      {(m.style === "atlas" || m.style === "classic") && (
         <rect
           x={frame.x - 3 * k}
           y={frame.y - 3 * k}
@@ -1154,7 +1251,7 @@ export function CartoMap({
           style={{ fontFamily: h.kind === "title" ? serif : sans, letterSpacing: h.kind === "org" ? "0.08em" : undefined }}
           fontSize={(h.kind === "title" ? 22 : h.kind === "subtitle" ? 11.5 : 9) * k}
           fontWeight={h.kind === "subtitle" ? 400 : 700}
-          fill={h.kind === "title" ? THEME.ink : THEME.muted}
+          fill={h.kind === "title" ? c.ink : c.muted}
         >
           {h.text}
         </text>
@@ -1170,15 +1267,15 @@ export function CartoMap({
         />
       )}
 
-      {m.northRect && <NorthArrow rect={m.northRect} k={k} />}
-      {m.scalebar && m.scaleRect && <ScaleBarMark rect={m.scaleRect} bar={m.scalebar} k={k} sans={sans} />}
+      {m.northRect && <NorthArrow rect={m.northRect} k={k} c={c} />}
+      {m.scalebar && m.scaleRect && <ScaleBarMark rect={m.scaleRect} bar={m.scalebar} k={k} sans={sans} c={c} />}
       {m.legend && m.legendRect && (
-        <Legend model={m.legend} rect={m.legendRect} k={k} serif={serif} sans={sans} boxed={!m.isWorld || m.legendRect.y < frame.y + frame.h} />
+        <Legend model={m.legend} rect={m.legendRect} k={k} serif={serif} sans={sans} c={c} boxed={!m.isWorld || m.legendRect.y < frame.y + frame.h} />
       )}
 
       {/* ── Footer ── */}
       {m.footer.map((l, i) => (
-        <text key={`f${i}`} x={m.margin} y={l.y} style={{ fontFamily: sans }} fontSize={m.footSize} fill={l.muted ? THEME.muted : THEME.ink}>
+        <text key={`f${i}`} x={m.margin} y={l.y} style={{ fontFamily: sans }} fontSize={m.footSize} fill={l.muted ? c.muted : c.ink}>
           {l.text}
         </text>
       ))}
@@ -1186,7 +1283,7 @@ export function CartoMap({
   );
 }
 
-function AtlasLabel({ label: l, k, serif, sans }: { label: MapLabel; k: number; serif: string; sans: string }) {
+function AtlasLabel({ label: l, k, serif, sans, dark }: { label: MapLabel; k: number; serif: string; sans: string; dark?: boolean }) {
   const st = LABEL_STYLE[l.role];
   const lines = l.text.split("\n");
   const common = {
@@ -1220,54 +1317,65 @@ function AtlasLabel({ label: l, k, serif, sans }: { label: MapLabel; k: number; 
           fill="#3b2a20"
         />
       )}
-      {body({ fill: "none", stroke: "#fffcf2", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
-      {body({ fill: st.fill })}
+      {body({ fill: "none", stroke: dark ? "#0b1412" : "#fffcf2", strokeWidth: 2.4 * k, strokeOpacity: 0.85, strokeLinejoin: "round" })}
+      {body({ fill: dark ? "#e8efe9" : st.fill })}
     </g>
   );
 }
 
-function NorthArrow({ rect, k }: { rect: Rect; k: number }) {
+/** Mix two #rrggbb colours (t = 0 → a, 1 → b). */
+function mixHex(a: string, b: string, t: number): string {
+  if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return t < 0.5 ? a : b;
+  const pa = a.match(/\w\w/g)!.map((x) => parseInt(x, 16));
+  const pb = b.match(/\w\w/g)!.map((x) => parseInt(x, 16));
+  const u = Math.max(0, Math.min(1, t));
+  return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * u).toString(16).padStart(2, "0")).join("");
+}
+
+type Ink = { ink: string; muted: string; panel: string; panelBorder: string; paper: string };
+
+function NorthArrow({ rect, k, c }: { rect: Rect; k: number; c: Ink }) {
   const cx = rect.x + rect.w / 2;
   const top = rect.y + 11 * k;
   return (
     <g>
       <polygon
         points={`${cx},${top} ${cx + 5 * k},${top + 16 * k} ${cx},${top + 12 * k}`}
-        fill={THEME.ink}
-        stroke={THEME.ink}
+        fill={c.ink}
+        stroke={c.ink}
         strokeWidth={0.6 * k}
         strokeLinejoin="round"
       />
       <polygon
         points={`${cx},${top} ${cx - 5 * k},${top + 16 * k} ${cx},${top + 12 * k}`}
-        fill={THEME.paper}
-        stroke={THEME.ink}
+        fill={c.paper}
+        stroke={c.ink}
         strokeWidth={0.6 * k}
         strokeLinejoin="round"
       />
-      <text x={cx} y={rect.y + 8 * k} textAnchor="middle" fontSize={9.5 * k} fontWeight={700} fill={THEME.ink}>
+      <text x={cx} y={rect.y + 8 * k} textAnchor="middle" fontSize={9.5 * k} fontWeight={700} fill={c.ink}>
         N
       </text>
     </g>
   );
 }
 
-function ScaleBarMark({ rect, bar, k, sans }: { rect: Rect; bar: ScaleBar; k: number; sans: string }) {
+function ScaleBarMark({ rect, bar, k, sans, c }: { rect: Rect; bar: ScaleBar; k: number; sans: string; c: Ink }) {
   const x = rect.x + 8 * k;
   const y = rect.y + 15 * k;
   const h = 4 * k;
   const q = bar.widthPx / 4;
   return (
     <g style={{ fontFamily: sans }}>
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={2 * k} fill={THEME.panel} fillOpacity={0.85} />
+      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={2 * k} fill={c.panel} fillOpacity={0.85} />
       {[0, 1, 2, 3].map((i) => (
-        <rect key={i} x={x + i * q} y={y} width={q} height={h} fill={i % 2 ? THEME.panel : THEME.ink} />
+        <rect key={i} x={x + i * q} y={y} width={q} height={h} fill={i % 2 ? c.panel : c.ink} />
       ))}
-      <rect x={x} y={y} width={bar.widthPx} height={h} fill="none" stroke={THEME.ink} strokeWidth={0.7 * k} />
-      <text x={x} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={THEME.ink}>
+      <rect x={x} y={y} width={bar.widthPx} height={h} fill="none" stroke={c.ink} strokeWidth={0.7 * k} />
+      <text x={x} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={c.ink}>
         0
       </text>
-      <text x={x + bar.widthPx} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={THEME.ink}>
+      <text x={x + bar.widthPx} y={y - 3.5 * k} textAnchor="middle" fontSize={8 * k} fill={c.ink}>
         {bar.label}
       </text>
     </g>
@@ -1281,6 +1389,7 @@ function Legend({
   serif,
   sans,
   boxed,
+  c,
 }: {
   model: LegendModel;
   rect: Rect;
@@ -1288,6 +1397,7 @@ function Legend({
   serif: string;
   sans: string;
   boxed: boolean;
+  c: Ink;
 }) {
   const pad = 9 * k;
   const titleSize = 10.5 * k;
@@ -1296,7 +1406,7 @@ function Legend({
   return (
     <g transform={`translate(${rect.x},${rect.y})`}>
       {boxed && (
-        <rect width={rect.w} height={rect.h} rx={2.5 * k} fill={THEME.panel} fillOpacity={0.94} stroke={THEME.panelBorder} strokeWidth={0.8 * k} />
+        <rect width={rect.w} height={rect.h} rx={2.5 * k} fill={c.panel} fillOpacity={0.94} stroke={c.panelBorder} strokeWidth={0.8 * k} />
       )}
       {model.title.map((t, i) => (
         <text
@@ -1306,7 +1416,7 @@ function Legend({
           style={{ fontFamily: serif }}
           fontSize={titleSize}
           fontWeight={700}
-          fill={THEME.ink}
+          fill={c.ink}
         >
           {t}
         </text>
@@ -1315,8 +1425,8 @@ function Legend({
         {model.kind === "classes" &&
           model.rows.map((r, i) => (
             <g key={i} transform={`translate(${pad},${top + i * 15 * k})`}>
-              <rect width={14 * k} height={10 * k} fill={r.color} stroke={THEME.panelBorder} strokeWidth={0.5 * k} />
-              <text x={21 * k} y={8.5 * k} fill={r.muted ? THEME.muted : THEME.ink}>
+              <rect width={14 * k} height={10 * k} fill={r.color} stroke={c.panelBorder} strokeWidth={0.5 * k} />
+              <text x={21 * k} y={8.5 * k} fill={r.muted ? c.muted : c.ink}>
                 {r.label}
               </text>
             </g>
@@ -1328,9 +1438,9 @@ function Legend({
               const ty = cy - s.r;
               return (
                 <g key={i}>
-                  <circle cy={cy} r={s.r} fill={model.color} fillOpacity={0.18} stroke={THEME.muted} strokeWidth={0.8 * k} />
-                  <line x1={0} y1={ty} x2={model.maxR + 6 * k} y2={ty} stroke={THEME.muted} strokeWidth={0.5 * k} strokeDasharray={`${1.5 * k} ${1.5 * k}`} />
-                  <text x={model.maxR + 9 * k} y={ty + labelSize * 0.35} fill={THEME.ink}>
+                  <circle cy={cy} r={s.r} fill={model.color} fillOpacity={0.18} stroke={c.muted} strokeWidth={0.8 * k} />
+                  <line x1={0} y1={ty} x2={model.maxR + 6 * k} y2={ty} stroke={c.muted} strokeWidth={0.5 * k} strokeDasharray={`${1.5 * k} ${1.5 * k}`} />
+                  <text x={model.maxR + 9 * k} y={ty + labelSize * 0.35} fill={c.ink}>
                     {s.label}
                   </text>
                 </g>
@@ -1341,8 +1451,8 @@ function Legend({
         {model.kind === "symbols" &&
           model.rows.map((r, i) => (
             <g key={i} transform={`translate(${pad},${top + i * model.rowH})`}>
-              <circle cx={r.r} cy={model.rowH / 2 - 2 * k} r={r.r} fill={r.color} stroke={THEME.symbolStroke} strokeWidth={0.7 * k} />
-              <text x={2 * r.r + 7 * k} y={model.rowH / 2 - 2 * k + labelSize * 0.35} fill={THEME.ink}>
+              <circle cx={r.r} cy={model.rowH / 2 - 2 * k} r={r.r} fill={r.color} stroke={c.paper} strokeWidth={0.7 * k} />
+              <text x={2 * r.r + 7 * k} y={model.rowH / 2 - 2 * k + labelSize * 0.35} fill={c.ink}>
                 {r.label}
               </text>
             </g>
