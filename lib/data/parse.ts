@@ -126,7 +126,7 @@ export function inferColumns(table: ParsedTable): ColumnRoles {
   const { columns, rows } = table;
   const roles: ColumnRoles = {};
 
-  // Latitude / longitude — header hint AND value range.
+  // Latitude / longitude, header hint AND value range.
   roles.latField = columns.find((c) => LAT_RE.test(c) && inRange(rows, c, -90, 90));
   roles.lonField = columns.find((c) => LON_RE.test(c) && inRange(rows, c, -180, 180));
 

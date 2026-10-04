@@ -5,10 +5,10 @@ import { DAILY_MAP_LIMIT } from "@/lib/quota-rules";
 const INCLUDED = [
   ["Every style", "Editorial, night, dot-matrix, atlas, classic and minimal"],
   ["Every geography", "World, continents, countries, provinces, districts, points"],
-  ["Print-ready files", "Vector PDF at A4 or Letter, SVG for designers — no watermark"],
+  ["Print-ready files", "Vector PDF at A4 or Letter, SVG for designers. No watermark"],
   ["The AI cartographer", "Reads your data and reports, explains every design decision"],
   ["Changes in plain words", "“Make it green”, “use natural breaks”, “drop the north arrow”"],
-  ["Your maps, kept", "Saved to your account — open and download again any time"],
+  ["Your maps, kept", "Saved to your account to open and download any time"],
 ];
 
 export function Free() {
@@ -23,7 +23,7 @@ export function Free() {
                 Free for everyone. <em className="font-normal text-atlas-leather">No premium, no catch.</em>
               </>
             }
-            sub="Maps should be for everyone who needs one — the district health officer, the geography teacher, the student with a thesis due. Make a free account and you have the whole studio."
+            sub="Maps should be for everyone who needs one: the analyst, the marketer, the health officer, the teacher, the student with a thesis due. Make a free account and you have the whole studio."
           />
           <dl className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2">
             {INCLUDED.map(([k, v]) => (
@@ -50,15 +50,15 @@ export function Free() {
                   style={{
                     background: [
                       "radial-gradient(circle at 60% 45%,#fff1c2 0,#ff9a3c 16%,#17221f 52%)",
-                      "linear-gradient(135deg,#e3dfd6 0 40%,#c0614f 40% 68%,#8b2e26 68%)",
-                      "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/6px 6px,#f6f1e7",
+                      "linear-gradient(135deg,#e3e7e5 0 40%,#c0614f 40% 68%,#8b2e26 68%)",
+                      "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/6px 6px,#ffffff",
                     ][i % 3],
                   }}
                 />
               ))}
             </div>
             <p className="mt-6 leading-relaxed text-atlas-ink-2">
-              Per person, over any 24 hours — plenty for a report&apos;s worth of maps. Changing a map and downloading it
+              Per person, over any 24 hours. Plenty for a report&apos;s worth of maps. Changing a map and downloading it
               again never count. The limit simply keeps the engine fast and free for everyone.
             </p>
             <Link

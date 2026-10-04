@@ -5,22 +5,22 @@ const STEPS = [
   {
     gate: "Free",
     title: "Tell us the map",
-    body: "One sentence is enough — “health facilities across Ghana, sized by patients”. Add any data you have: CSV or Excel, a PDF report, a pasted list of places, even a photo of a printed table.",
+    body: "One sentence is enough: “our stores in the UK, sized by sales”. Add any data you have: CSV or Excel, a PDF report, a pasted list of places, even a photo of a printed table.",
   },
   {
     gate: "Free",
     title: "The engine reads and decides",
-    body: "It finds the places in your data — countries, provinces, districts, towns or coordinates — and makes the calls a cartographer would: projection, level of detail, classification, palette, style and layout.",
+    body: "It finds the places in your data (countries, provinces, districts, towns or coordinates) and makes the calls a cartographer would: projection, level of detail, classification, palette, style and layout.",
   },
   {
     gate: "Free",
     title: "Preview and refine",
-    body: "Switch style, page size or orientation, toggle map elements, and ask for changes in plain words — “make it green”, “use natural breaks”. The engine explains why it drew the map the way it did.",
+    body: "Switch style, page size or orientation, toggle map elements, and ask for changes in plain words: “make it green”, “use natural breaks”. The engine explains why it drew the map the way it did.",
   },
   {
     gate: "Yours",
     title: "Download print-ready files",
-    body: "A vector PDF at A4 or Letter for print and an SVG for your designer — no watermark, no charge. Every map is saved to your account to open and download again.",
+    body: "A vector PDF at A4 or Letter for print and an SVG for your designer. No watermark, no charge. Every map is saved to your account to open and download again.",
   },
 ];
 
@@ -29,7 +29,7 @@ const DECISIONS = [
   ["Geography", "Country, province, district or points"],
   ["Classes", "Quantile, equal interval or natural breaks"],
   ["Colour", "ColorBrewer ramps matched to the data"],
-  ["Look", "Editorial, night, dots — or terrain on request"],
+  ["Look", "Editorial, night or dots. Terrain on request"],
   ["Layout", "Legend placed where it hides nothing"],
 ];
 
@@ -57,13 +57,13 @@ export function HowItWorks() {
           <ol className="relative space-y-10 border-l border-atlas-paper/15 pl-10">
             {STEPS.map((s, i) => (
               <li key={s.title} className="relative">
-                <span className="absolute -left-[3.05rem] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-atlas-ochre/60 bg-atlas-forest font-mono text-xs text-atlas-ochre">
+                <span className="absolute -left-[3.05rem] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-atlas-ochre/60 bg-atlas-forest tabular-nums text-xs text-atlas-ochre">
                   {i + 1}
                 </span>
                 <div className="flex flex-wrap items-center gap-3">
                   <h3 className="display text-2xl font-semibold">{s.title}</h3>
                   <span
-                    className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider ${
+                    className={`rounded-full px-2.5 py-0.5 tabular-nums text-[11px] ${
                       s.gate === "Yours" ? "bg-atlas-green/80 text-atlas-pine" : "border border-atlas-paper/25 text-atlas-paper/70"
                     }`}
                   >
@@ -80,7 +80,7 @@ export function HowItWorks() {
             <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
               {DECISIONS.map(([k, v]) => (
                 <div key={k} className="flex gap-3">
-                  <dt className="w-24 shrink-0 font-mono text-xs uppercase tracking-wider text-atlas-sage/80">{k}</dt>
+                  <dt className="w-24 shrink-0 tabular-nums text-xs text-atlas-sage/80">{k}</dt>
                   <dd className="text-sm text-atlas-paper/75">{v}</dd>
                 </div>
               ))}

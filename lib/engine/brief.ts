@@ -1,7 +1,7 @@
 /**
  * Step 1 of the engine: read the brief. Turns a sentence like "Provinces of Zambia"
  * or "rainfall by district in Malawi for a donor report" into facts the rulebook can
- * act on — where, at what level, about what, and what kind of map. Deterministic:
+ * act on, where, at what level, about what, and what kind of map. Deterministic:
  * the same words always give the same reading.
  */
 import { COUNTRIES } from "@/lib/profile-options";
@@ -68,7 +68,7 @@ function countriesIn(text: string, norm: string): string[] {
   let padded = ` ${norm} `;
   const found: { name: string; at: number }[] = [];
   for (const n of NAMES) {
-    // "us" is a pronoun in prose — only the capitalised abbreviation counts.
+    // "us" is a pronoun in prose, only the capitalised abbreviation counts.
     if (n.norm === "us") continue;
     const at = padded.indexOf(` ${n.norm} `);
     if (at < 0) continue;
@@ -133,7 +133,7 @@ export function readBrief(text: string, opts: { hasData?: boolean } = {}): Brief
   return { text, place, countries: countries.map(displayCountry), units, theme, intent, style, palette, year, orientation, illustrative };
 }
 
-/** "Provinces of Zambia" — how an atlas names a reference plate. */
+/** "Provinces of Zambia", how an atlas names a reference plate. */
 export function referenceTitle(b: Brief): string | null {
   if (!b.place) return null;
   if (b.units && b.units.level !== "points" && b.units.level !== "countries" && b.place.kind === "country")

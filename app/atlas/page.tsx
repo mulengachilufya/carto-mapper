@@ -3,7 +3,7 @@ import { Footer } from "@/components/site/Footer";
 import { AtlasGallery } from "@/components/marketing/AtlasGallery";
 
 export const metadata = {
-  title: "Gallery — CartoMapper",
+  title: "Gallery · CartoMapper",
   description: "Maps drawn live by the CartoMapper engine for finance, retail, health, tourism, energy and more: editorial, night, dot-matrix and atlas styles.",
 };
 

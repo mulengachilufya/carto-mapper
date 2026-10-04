@@ -7,27 +7,27 @@ const FAQ = [
   },
   {
     q: "Which places does it know?",
-    a: "Every country; provinces, states and counties for 199 countries; districts for most of them; and over 7,000 cities and towns. Names are matched forgivingly — “Copperbelt Province”, “North Western” and “Kano State” all find their boundaries.",
+    a: "Every country; provinces, states and counties for 199 countries; districts for most of them; and over 7,000 cities and towns. Names are matched forgivingly: “Copperbelt Province”, “North Western” and “Kano State” all find their boundaries.",
   },
   {
     q: "Is it really print quality?",
-    a: "Yes. You download a vector PDF at A4 or Letter — text and lines stay razor-sharp at any size — with terrain embedded at print resolution, plus an SVG for your designer.",
+    a: "Yes. You download a vector PDF at A4 or Letter (text and lines stay razor-sharp at any size) with terrain embedded at print resolution, plus an SVG for your designer.",
   },
   {
     q: "Can I use the maps commercially?",
-    a: "Yes, the maps are yours. The source line credits the open data behind them — Natural Earth (public domain), geoBoundaries (CC BY 4.0) and Mapzen terrain — as their licences ask.",
+    a: "Yes, the maps are yours. The source line credits the open data behind them (Natural Earth, geoBoundaries CC BY 4.0 and Mapzen terrain), as their licences ask.",
   },
   {
     q: "What if the map isn't right?",
-    a: "Change style, size and elements freely, and ask for up to 20 changes per map in plain words — “make it green”, “use natural breaks”. None of it counts toward your daily maps.",
+    a: "Change style, size and elements freely, and ask for up to 20 changes per map in plain words: “make it green”, “use natural breaks”. None of it counts toward your daily maps.",
   },
   {
     q: "Is it really free?",
-    a: "Yes — no premium tier, no trial, no card. Every account gets the whole studio. The one limit is 10 new maps per person in any 24 hours, which keeps the engine fast for everyone.",
+    a: "Yes. No premium tier, no trial, no card. Every account gets the whole studio. The one limit is 10 new maps per person in any 24 hours, which keeps the engine fast for everyone.",
   },
   {
     q: "Why do I need an account?",
-    a: "So your maps are saved for you to open and download again, and so the daily limit is fair — per person, not per browser. Signing up takes about thirty seconds: your name, country, what you do, email and a password.",
+    a: "So your maps are saved for you to open and download again, and so the daily limit is fair: per person, not per browser. Signing up takes about thirty seconds: your name, country, what you do, email and a password.",
   },
 ];
 

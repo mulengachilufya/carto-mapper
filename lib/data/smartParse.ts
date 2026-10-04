@@ -2,10 +2,10 @@ import Papa from "papaparse";
 import { asNumber, type ParsedTable, type Row } from "@/lib/data/parse";
 
 /**
- * Read whatever someone pastes into a table — no required format:
+ * Read whatever someone pastes into a table, no required format:
  *
  *   • a table with or without a header row (tab, comma, semicolon, pipe or
- *     aligned with spaces — pasted from Excel, Sheets, Word or a PDF)
+ *     aligned with spaces, pasted from Excel, Sheets, Word or a PDF)
  *   • a Markdown table
  *   • a plain list of places, one per line or "Kenya, Uganda, Tanzania"
  *   • "Place  1,200" lines (a name followed by a number)
@@ -110,7 +110,7 @@ function pickDelimiter(lines: string[]): string | null {
     if (positive.length < lines.length * 0.8) continue;
     const mode = mostCommon(positive);
     const consistency = counts.filter((c) => c === mode).length / lines.length;
-    // Commas inside numbers ("1,200") make comma counts noisy — prefer other delimiters on ties.
+    // Commas inside numbers ("1,200") make comma counts noisy, prefer other delimiters on ties.
     const score = consistency + (d === "," ? -0.05 : 0);
     if (consistency >= 0.7 && (!best || score > best.score)) best = { d, score };
   }

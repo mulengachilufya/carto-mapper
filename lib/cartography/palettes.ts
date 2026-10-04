@@ -41,20 +41,20 @@ interface PaletteDef {
 }
 
 /**
- * Curated ColorBrewer palettes only — the schemes professional cartographers
+ * Curated ColorBrewer palettes only, the schemes professional cartographers
  * actually reach for. No rainbow ramps, no neon. Sequential for one-directional
  * quantitative data, diverging for data around a meaningful midpoint, qualitative
  * for categories.
  */
 const REGISTRY: Record<string, PaletteDef> = {
-  // Sequential — single hue
+  // Sequential, single hue
   Blues: { kind: "sequential", scheme: schemeBlues },
   Greens: { kind: "sequential", scheme: schemeGreens },
   Greys: { kind: "sequential", scheme: schemeGreys },
   Oranges: { kind: "sequential", scheme: schemeOranges },
   Purples: { kind: "sequential", scheme: schemePurples },
   Reds: { kind: "sequential", scheme: schemeReds },
-  // Sequential — multi hue
+  // Sequential, multi hue
   BuGn: { kind: "sequential", scheme: schemeBuGn },
   BuPu: { kind: "sequential", scheme: schemeBuPu },
   GnBu: { kind: "sequential", scheme: schemeGnBu },
@@ -108,11 +108,11 @@ const mix = (a: string, b: string, t: number) => {
 function customRamp(hex: string, k: number): string[] {
   return Array.from({ length: k }, (_, i) => {
     const t = k === 1 ? 1 : i / (k - 1);
-    return t < 0.7 ? mix("#f7f4ee", hex, 0.14 + (t / 0.7) * 0.86) : mix(hex, "#000000", ((t - 0.7) / 0.3) * 0.35);
+    return t < 0.7 ? mix("#f5f7f6", hex, 0.14 + (t / 0.7) * 0.86) : mix(hex, "#000000", ((t - 0.7) / 0.3) * 0.35);
   });
 }
 
-/** Discrete colours for a classed map. Clamped to a sensible 3–9 class range. */
+/** Discrete colours for a classed map. Clamped to a sensible 3 to 9 class range. */
 export function getPaletteColors(name: string, classes: number, reverse = false): string[] {
   if (HEX.test(name)) {
     const colors = customRamp(name, Math.max(3, Math.min(9, classes)));

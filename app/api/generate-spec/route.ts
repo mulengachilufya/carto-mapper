@@ -101,7 +101,7 @@ export async function POST(req: Request) {
   if (!revision && !run.brief.style && OLD_LOOKS.includes(spec.style) && !OLD_LOOKS.includes(baseline.style))
     spec = parseMapSpec({ ...spec, style: baseline.style });
 
-  // Every spec — rulebook's, AI's or revised — passes the engine's checks.
+  // Every spec, rulebook's, AI's or revised, passes the engine's checks.
   spec = finalize(spec, run, facts, { aiDecisions, revision: revision?.revisionRequest });
   // The look and colours picked in the wizard always win.
   const look = typeof body.look === "string" && (MAP_STYLES as readonly string[]).includes(body.look) ? (body.look as MapSpec["style"]) : undefined;

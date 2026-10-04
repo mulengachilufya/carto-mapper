@@ -22,7 +22,7 @@ export function getServiceSupabase(): SupabaseClient | null {
 /**
  * Accounts are on when Supabase is fully configured: the anon key signs people in,
  * the service key saves their maps and counts them against the daily limit. Without
- * it (local development) the site runs open — no sign-in, no saving, no limit.
+ * it (local development) the site runs open, no sign-in, no saving, no limit.
  */
 export function accountsEnabled(): boolean {
   return Boolean(
@@ -52,7 +52,7 @@ export async function createServerSupabase(): Promise<SupabaseClient> {
 }
 
 /**
- * The signed-in user, verified with Supabase Auth (getUser, not getSession — a
+ * The signed-in user, verified with Supabase Auth (getUser, not getSession, a
  * cookie's JWT is never trusted without checking it). Null when signed out or
  * when accounts are off.
  */

@@ -7,7 +7,7 @@ import { HowItWorks } from "@/components/home/HowItWorks";
 import { Faq } from "@/components/home/Faq";
 import { FinalCta } from "@/components/home/FinalCta";
 
-export const metadata = { title: "How it works — CartoMapper" };
+export const metadata = { title: "How it works · CartoMapper" };
 
 /** The longer story: how the engine works, the styles, who it's for, questions. */
 export default function HowItWorksPage() {

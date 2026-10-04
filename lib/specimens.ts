@@ -118,7 +118,7 @@ export const SPECIMENS: Specimen[] = [
   {
     id: "us-home-prices",
     title: "Home prices by state",
-    note: "Editorial style · flat, bold state choropleth — no terrain, no rivers, just the story.",
+    note: "Editorial style · flat, bold state choropleth. No terrain, no rivers, just the story.",
     poster: { eyebrow: "Real estate", headline: "The price map behind", em: "every market report.", prompt: "Median home value by state, United States" },
     subdivisionsOf: "United States of America",
     build: (_geo, subs) => {
@@ -272,7 +272,7 @@ export const SPECIMENS: Specimen[] = [
   {
     id: "world-internet",
     title: "The world, editorial",
-    note: "Editorial style · world choropleth on Equal Earth — area honest, no Mercator.",
+    note: "Editorial style · world choropleth on Equal Earth: honest areas, no Mercator.",
     poster: { eyebrow: "Global data desks", headline: "The whole world,", em: "honestly projected.", prompt: "Share of people using the internet, every country" },
     build: (geo) => {
       const feats = geo.features.filter((f) => nameOf(f) !== "Antarctica");

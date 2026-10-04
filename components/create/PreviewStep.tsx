@@ -100,7 +100,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
   return (
     <div>
       <h2 className="display text-4xl font-semibold text-ink">Your map</h2>
-      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Download the print-ready PDF — it&apos;s free.</p>
+      <p className="mt-1.5 text-muted">Toggle elements, tweak the page, or ask for a change. Looks good? Download the print-ready PDF. It&apos;s free.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Map */}
@@ -125,7 +125,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
           )}
           {coverage && coverage.matched < coverage.total && (
             <p className="mt-2 text-[13px] text-amber-700">
-              Matched {coverage.matched} of {coverage.total} place names to {coverage.noun} — unmatched places stay uncoloured (shown as “No data”). Check the spelling against official names.
+              Matched {coverage.matched} of {coverage.total} place names to {coverage.noun}. Unmatched places stay uncoloured (shown as “No data”). Check the spelling against official names.
             </p>
           )}
         </div>
@@ -239,7 +239,7 @@ const SOURCE: Record<Decision["by"], { label: string; cls: string }> = {
   check: { label: "Corrected", cls: "bg-amber-100 text-amber-900" },
 };
 
-/** The engine's reasoning, rule by rule — and anything its checks corrected. */
+/** The engine's reasoning, rule by rule, and anything its checks corrected. */
 function DecisionLog({ decisions }: { decisions: Decision[] }) {
   const corrected = decisions.filter((d) => d.by === "check").length;
   return (
@@ -253,7 +253,7 @@ function DecisionLog({ decisions }: { decisions: Decision[] }) {
       <ol className="mt-3 divide-y divide-line">
         {decisions.map((d, i) => (
           <li key={i} className="grid grid-cols-[auto_1fr] gap-x-3 py-2.5">
-            <span className="pt-0.5 font-mono text-[11px] text-muted">{d.rule}</span>
+            <span className="pt-0.5 tabular-nums text-[11px] text-muted">{d.rule}</span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-ink">{d.topic}:</span>
@@ -272,7 +272,7 @@ function DecisionLog({ decisions }: { decisions: Decision[] }) {
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-line bg-paper p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</h3>
+      <h3 className="text-xs font-semibold text-muted">{title}</h3>
       <div className="mt-3">{children}</div>
     </div>
   );

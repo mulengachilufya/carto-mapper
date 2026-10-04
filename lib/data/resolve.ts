@@ -47,8 +47,8 @@ const KIND_LEVEL: Record<Exclude<PlaceKind, "coordinates" | "towns">, GeoLevel> 
 };
 
 /**
- * Work out what a table's places are — countries, provinces, districts, towns or
- * coordinates — and where in the world they are, so the map can be drawn at the
+ * Work out what a table's places are, countries, provinces, districts, towns or
+ * coordinates, and where in the world they are, so the map can be drawn at the
  * right level without the user having to say. Towns are geocoded from the gazetteer.
  */
 export async function resolvePlaces(

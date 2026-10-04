@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { SignupForm } from "@/components/auth/SignupForm";
 
-export const metadata = { title: "Create your free account — CartoMapper" };
+export const metadata = { title: "Create your free account · CartoMapper" };
 
 export default function SignupPage() {
   return (

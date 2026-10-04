@@ -66,7 +66,7 @@ export interface Theme {
   palette: string; // ColorBrewer sequential ramp
   diverging?: string; // ramp to use when values cross a midpoint
   format?: string;
-  /** A total rather than a rate — misleads as a choropleth over units of unequal size. */
+  /** A total rather than a rate, misleads as a choropleth over units of unequal size. */
   count?: boolean;
   style?: MapStyle;
 }

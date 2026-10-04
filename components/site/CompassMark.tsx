@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-/** The brand compass — its needle tracks the cursor on desktop, like an instrument. */
+/** The brand compass, its needle tracks the cursor on desktop, like an instrument. */
 export function CompassMark() {
   const needleRef = useRef<SVGGElement>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);

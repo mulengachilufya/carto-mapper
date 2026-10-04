@@ -79,17 +79,17 @@ export function SpecimenPlate({ id, caption = true, className }: { id: string; c
 
 /** Card colours per map style, so the map bleeds into its poster. */
 const POSTER_THEME: Record<string, { bg: string; fg: string; accent: string; soft: string }> = {
-  night: { bg: "#0b1412", fg: "#f4efe4", accent: "#e8b86a", soft: "rgba(244,239,228,.62)" },
-  editorial: { bg: "#faf8f4", fg: "#1c1a17", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
-  dots: { bg: "#f6f1e7", fg: "#1c1a17", accent: "#1f5c4d", soft: "rgba(28,26,23,.6)" },
-  atlas: { bg: "#fbf8f0", fg: "#1c1a17", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
-  classic: { bg: "#fbf7ee", fg: "#1c1a17", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
-  minimal: { bg: "#fdfcf8", fg: "#1c1a17", accent: "#1f5c4d", soft: "rgba(28,26,23,.6)" },
+  night: { bg: "#0b1412", fg: "#f2f5f3", accent: "#e8b86a", soft: "rgba(244,239,228,.62)" },
+  editorial: { bg: "#ffffff", fg: "#111614", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
+  dots: { bg: "#ffffff", fg: "#111614", accent: "#1f5c4d", soft: "rgba(28,26,23,.6)" },
+  atlas: { bg: "#ffffff", fg: "#111614", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
+  classic: { bg: "#ffffff", fg: "#111614", accent: "#8b2e26", soft: "rgba(28,26,23,.6)" },
+  minimal: { bg: "#ffffff", fg: "#111614", accent: "#1f5c4d", soft: "rgba(28,26,23,.6)" },
 };
 const STYLE_NAME: Record<string, string> = { night: "Night", editorial: "Editorial", dots: "Dots", atlas: "Atlas", classic: "Classic", minimal: "Minimal" };
 
 /**
- * A showcase poster: the same live engine map, framed like a social post — who it's
+ * A showcase poster: the same live engine map, framed like a social post, who it's
  * for, one line, the map, and the sentence that made it.
  */
 export function PosterCard({ id, className, compact }: { id: string; className?: string; compact?: boolean }) {
@@ -120,7 +120,7 @@ export function PosterCard({ id, className, compact }: { id: string; className?:
       </div>
       <figcaption className={`flex items-center justify-between gap-4 border-t text-[13px] ${compact ? "px-5 py-3 sm:px-6" : "px-6 py-4 sm:px-8"}`} style={{ borderColor: t.soft.replace(/[\d.]+\)$/, ".15)"), color: t.soft }}>
         <span className="truncate">Typed: <span style={{ color: t.fg }}>“{s.poster.prompt}”</span></span>
-        <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider" style={{ background: t.accent, color: t.bg }}>{STYLE_NAME[style] ?? style}</span>
+        <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: t.accent, color: t.bg }}>{STYLE_NAME[style] ?? style}</span>
       </figcaption>
     </figure>
   );

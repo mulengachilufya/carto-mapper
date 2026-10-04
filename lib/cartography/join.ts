@@ -47,8 +47,8 @@ function subdivisionIndex(fc: FeatureCollection) {
 }
 
 /**
- * Decide which boundary set a table's place names refer to — countries, provinces
- * or districts — by how many names actually match, honouring the spec's level when
+ * Decide which boundary set a table's place names refer to, countries, provinces
+ * or districts, by how many names actually match, honouring the spec's level when
  * it has matches. A province table on a "country" map therefore still shades the
  * provinces instead of rendering an all-"No data" map.
  */

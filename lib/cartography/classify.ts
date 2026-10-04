@@ -9,9 +9,9 @@ export interface ClassBreaks {
 
 /**
  * Turn raw values into class breaks using a real cartographic method:
- *  - quantile        — equal count per class (good for skewed data)
- *  - equal_interval  — equal value range per class
- *  - jenks           — natural breaks (ckmeans), minimises within-class variance
+ *  - quantile       , equal count per class (good for skewed data)
+ *  - equal_interval , equal value range per class
+ *  - jenks          , natural breaks (ckmeans), minimises within-class variance
  */
 export function classify(
   rawValues: number[],

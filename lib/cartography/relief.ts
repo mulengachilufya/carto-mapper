@@ -167,7 +167,7 @@ export async function renderRelief(req: ReliefRequest): Promise<ReliefImages | n
   while (z > 0 && (t.x1 - t.x0 + 1) * (t.y1 - t.y0 + 1) > MAX_TILES) t = span(--z);
 
   // 3. Fetch the tiles and sample elevation for every pixel (bilinear). A tile that
-  // won't load is filled from its parent at lower zoom — softer, but never a hole.
+  // won't load is filled from its parent at lower zoom, softer, but never a hole.
   const wrap = (x: number, zz: number) => ((x % (1 << zz)) + (1 << zz)) % (1 << zz);
   const tiles = new Map<string, Float32Array | null>();
   const need: [number, number, number][] = [];

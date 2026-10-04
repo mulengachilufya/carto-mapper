@@ -4,7 +4,7 @@ import { z } from "zod";
  * The MapSpec is the single source of truth for a map. It is produced by the
  * map-intelligence step (Claude API, with a deterministic fallback) and consumed
  * by the D3 renderer. Validated with Zod so untrusted model output can never
- * crash the renderer — anything missing or malformed falls back to a sane default.
+ * crash the renderer, anything missing or malformed falls back to a sane default.
  */
 
 export const MAP_TYPES = [
@@ -29,12 +29,12 @@ export const GEO_LEVELS = [
 
 /**
  * The look of the base map:
- *  - atlas    — a physical school-atlas page: hypsometric relief, sea depths, rivers, lakes
- *  - classic  — a political atlas page: pastel countries, water-lined coasts, rivers
- *  - minimal  — quiet paper-and-ink, for reports where the data must be the only colour
- *  - editorial — flat, bold, newsroom-graphic: grey land, crisp white borders, no terrain or rivers
- *  - night    — a dark ground where the data glows, for launches, decks and social posts
- *  - dots     — dot-matrix: land and data drawn as a grid of dots, poster-like
+ *  - atlas   , a physical school-atlas page: hypsometric relief, sea depths, rivers, lakes
+ *  - classic , a political atlas page: pastel countries, water-lined coasts, rivers
+ *  - minimal , quiet paper-and-ink, for reports where the data must be the only colour
+ *  - editorial, flat, bold, newsroom-graphic: grey land, crisp white borders, no terrain or rivers
+ *  - night   , a dark ground where the data glows, for launches, decks and social posts
+ *  - dots    , dot-matrix: land and data drawn as a grid of dots, poster-like
  */
 export const MAP_STYLES = ["editorial", "night", "dots", "atlas", "classic", "minimal"] as const;
 
@@ -138,7 +138,7 @@ export const MapSpecSchema = z.object({
     })
     .default({ size: "A4", orientation: "landscape" }),
 
-  // User branding — title is above; these sit on the map.
+  // User branding, title is above; these sit on the map.
   branding: z
     .object({
       organisation: z.string().optional(),
@@ -160,7 +160,7 @@ export type GeoLevel = (typeof GEO_LEVELS)[number];
 export type PaletteKind = (typeof PALETTE_KINDS)[number];
 export type Classification = (typeof CLASSIFICATIONS)[number];
 
-/** Parse loosely — never throws; fills defaults for anything malformed. */
+/** Parse loosely, never throws; fills defaults for anything malformed. */
 export function parseMapSpec(input: unknown): MapSpec {
   // Salvage field by field: drop only the values that fail validation and let their
   // defaults fill in, so one bad field (say, 11 classes) never resets a whole map.

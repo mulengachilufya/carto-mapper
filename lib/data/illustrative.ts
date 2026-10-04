@@ -7,8 +7,8 @@ import { parseMapSpec, type MapSpec } from "@/lib/mapspec/schema";
 /**
  * When a brief describes data it didn't include ("rainfall by province, Zambia"), the
  * engine marks the spec illustrative and the browser fills in plausible sample values
- * over the right units — the real province names, a smooth spatial pattern, a range
- * that suits the subject — clearly labelled as illustrative on the map.
+ * over the right units, the real province names, a smooth spatial pattern, a range
+ * that suits the subject, clearly labelled as illustrative on the map.
  */
 export async function illustrativeData(
   spec: MapSpec,
@@ -93,7 +93,7 @@ function siteNoun(title: string): string {
   return m ? m[1].replace(/Facilit/i, "Facility") : "Site";
 }
 
-/** A smooth 0–1 surface over the units' extent: a few broad bumps, like real spatial data. */
+/** A smooth 0 to 1 surface over the units' extent: a few broad bumps, like real spatial data. */
 function smoothField(units: Feature[]): (lon: number, lat: number) => number {
   const cs = units.map((f) => geoCentroid(f as never));
   const lons = cs.map((c) => c[0]);

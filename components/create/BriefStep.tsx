@@ -37,10 +37,10 @@ const PROMPT_IDEAS = [
 ];
 
 const PASTE_IDEAS: { label: string; text: string }[] = [
-  { label: "A list of places", text: "Nairobi\nMombasa\nKisumu\nNakuru\nEldoret\nGarissa" },
-  { label: "A table from Excel", text: "County\tSchools\nNairobi City\t812\nMombasa\t301\nKisumu\t290\nNakuru\t410\nTurkana\t88\nKiambu\t505" },
+  { label: "A list of places", text: "Tokyo\nLondon\nNew York\nParis\nSão Paulo\nSydney" },
+  { label: "A table from Excel", text: "State\tStores\nCalifornia\t812\nTexas\t604\nNew York\t455\nFlorida\t512\nIllinois\t298\nWashington\t240" },
   { label: "Coordinates", text: "Cusco office -13.53, -71.97\nLima HQ -12.05, -77.04\nArequipa depot -16.41, -71.54" },
-  { label: "A sentence", text: "In 2025 we ran clinics in Accra, Kumasi, Tamale and Cape Coast, and opened a new site in Ho." },
+  { label: "A sentence", text: "In 2025 we opened stores in Berlin, Munich, Hamburg and Cologne, and a pop-up in Frankfurt." },
 ];
 
 const ROLE_FIELDS: { key: keyof ColumnRoles; label: string }[] = [
@@ -104,7 +104,7 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
             const t2: ParsedTable = { columns: ["Place"], rows: names.map((n) => ({ Place: n })), rowCount: names.length };
             setNote(null);
             setRaw({ table: t2, roles: { nameField: "Place" } });
-          } else setNote("We couldn't find any places in that text yet — try a list of names, a table or coordinates.");
+          } else setNote("We couldn't find any places in that text yet. Try a list of names, a table or coordinates.");
         });
       }
     }, 350);
@@ -206,10 +206,10 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
       {/* ── 2. Any data ── */}
       <section>
         <p className="eyebrow text-accent">Step two · optional</p>
-        <h3 className="display mt-2 text-3xl font-semibold text-ink">Give us your data — in any shape</h3>
+        <h3 className="display mt-2 text-3xl font-semibold text-ink">Give us your data, in any shape</h3>
         <p className="mt-2 max-w-2xl text-muted">
           Paste a table from Excel, a list of towns, coordinates, or just a paragraph that mentions places. No required
-          columns, no required format — we&apos;ll find the places and show you what we understood.
+          columns, no required format. We&apos;ll find the places and show you what we understood.
         </p>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
@@ -218,8 +218,8 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
               value={paste}
               onChange={(e) => setPaste(e.target.value)}
               rows={8}
-              placeholder={"Paste anything here…\n\nNairobi\t812\nMombasa\t301\nKisumu\t290"}
-              className="w-full rounded-lg border border-line bg-paper p-4 font-mono text-sm leading-relaxed outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+              placeholder={"Paste anything here…\n\nLondon\t812\nParis\t301\nTokyo\t290"}
+              className="w-full rounded-lg border border-line bg-paper p-4 tabular-nums text-sm leading-relaxed outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="text-muted">Try:</span>
@@ -332,7 +332,7 @@ function DataCard({
           ) : (
             <p className="mt-1 text-lg font-medium text-ink">
               {r.reading.total} {KIND_NOUN[r.reading.kind]}
-              {r.reading.country ? ` ${r.reading.kind === "towns" || r.reading.kind === "coordinates" ? "in" : "of"} ${r.reading.country}` : ""} —{" "}
+              {r.reading.country ? ` ${r.reading.kind === "towns" || r.reading.kind === "coordinates" ? "in" : "of"} ${r.reading.country}` : ""}: {" "}
               <span className={allGood ? "text-emerald-700" : "text-amber-700"}>
                 {allGood ? "all found" : `${r.reading.matched} of ${r.reading.total} found`}
               </span>
@@ -365,7 +365,7 @@ function DataCard({
 
       <div className="max-h-72 overflow-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-paper text-left text-xs uppercase tracking-wider text-muted">
+          <thead className="sticky top-0 bg-paper text-left text-xs text-muted">
             <tr>
               <th className="w-8 px-3 py-2" />
               {cols.map((c) => (
@@ -384,8 +384,8 @@ function DataCard({
                     {r ? (ok ? <span className="text-emerald-600">●</span> : <span className="text-amber-600" title="Not found">○</span>) : null}
                   </td>
                   {cols.map((c) => (
-                    <td key={c} className={`px-3 py-1.5 ${typeof row[c] === "number" ? "font-mono tabular-nums" : ""}`}>
-                      {row[c] === null || row[c] === undefined ? <span className="text-muted/50">—</span> : String(row[c])}
+                    <td key={c} className={`px-3 py-1.5 ${typeof row[c] === "number" ? "tabular-nums tabular-nums" : ""}`}>
+                      {row[c] === null || row[c] === undefined ? <span className="text-muted/50">·</span> : String(row[c])}
                     </td>
                   ))}
                 </tr>
@@ -400,7 +400,7 @@ function DataCard({
         <p className="border-t border-line bg-amber-50/60 px-5 py-3 text-sm text-amber-800">
           Not found: {r.unmatched.slice(0, 12).join(", ")}
           {r.unmatched.length > 12 ? ` and ${r.unmatched.length - 12} more` : ""}. Check the spelling, or try another
-          reading above — these stay off the map.
+          reading above. These stay off the map.
         </p>
       )}
 
@@ -415,7 +415,7 @@ function DataCard({
                 onChange={(e) => onRoles({ ...roles, [f.key]: e.target.value || undefined })}
                 className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1.5 outline-none focus:border-accent"
               >
-                <option value="">— none —</option>
+                <option value="">None</option>
                 {table.columns.map((c) => (
                   <option key={c} value={c}>
                     {c}
