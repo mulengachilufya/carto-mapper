@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import { Button } from "@/components/ui/Button";
 import { LOOKS } from "./looks";
+import { FontPicker } from "./FontPicker";
 import { CartoMap } from "@/components/cartography/CartoMap";
 import { useSubdivisions } from "@/components/cartography/useSubdivisions";
 import { chooseJoin } from "@/lib/cartography/join";
@@ -81,7 +82,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
     if (!svg) return;
     setExporting(true);
     try {
-      await exportSvgToPdf(svg as SVGSVGElement, spec.page, slug(spec.title));
+      await exportSvgToPdf(svg as SVGSVGElement, spec.page, slug(spec.title), [spec.typography.title, spec.typography.text]);
       onDownloaded();
     } catch {
       /* ignore */
@@ -149,6 +150,15 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
                 </button>
               ))}
             </div>
+          </Panel>
+
+          <Panel title="Fonts">
+            <FontPicker
+              stacked
+              title={spec.typography.title}
+              text={spec.typography.text}
+              onChange={(f) => setSpec(parseMapSpec({ ...spec, typography: f }))}
+            />
           </Panel>
 
           <Panel title="Map elements">

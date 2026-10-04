@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/Button";
 import { getPaletteColors } from "@/lib/cartography/palettes";
 import type { MapSpec } from "@/lib/mapspec/schema";
 import { COLOURS, LOOKS } from "./looks";
+import { FontPicker } from "./FontPicker";
 
 interface Props {
   look: MapSpec["style"] | null;
   palette: string | null;
   onLook: (l: MapSpec["style"] | null) => void;
   onPalette: (p: string | null) => void;
+  fonts: { title: string; text: string };
+  onFonts: (f: { title: string; text: string }) => void;
   onBack: () => void;
   onNext: () => void;
 }
@@ -32,7 +35,7 @@ const card = (on: boolean) =>
   }`;
 
 /** The look and the colours, chosen by eye. The engine still picks the map type from your data. */
-export function LookStep({ look, palette, onLook, onPalette, onBack, onNext }: Props) {
+export function LookStep({ look, palette, onLook, onPalette, fonts, onFonts, onBack, onNext }: Props) {
   const custom = palette && HEX.test(palette) ? palette : null;
   return (
     <div>
@@ -82,6 +85,12 @@ export function LookStep({ look, palette, onLook, onPalette, onBack, onNext }: P
         </label>
       </div>
       <p className="mt-3 text-xs text-muted">Maps of categories (sites by type) keep distinct colours so every category stays readable.</p>
+
+      <h3 className="eyebrow mt-10 text-atlas-leather">Fonts</h3>
+      <p className="mt-1 text-sm text-muted">Carlito (like Calibri) by default. Pick a different one for the title if you like.</p>
+      <div className="mt-3 max-w-2xl">
+        <FontPicker title={fonts.title} text={fonts.text} onChange={onFonts} />
+      </div>
 
       <div className="mt-10 flex items-center justify-between">
         <Button onClick={onBack} variant="ghost">← Back</Button>

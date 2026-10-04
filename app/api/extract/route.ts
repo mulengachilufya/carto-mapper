@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (accountsEnabled()) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "signin" }, { status: 401 });
-    if ((await getUsage(user.id)).remaining <= 0) return NextResponse.json({ table: null, roles: null });
+    if ((await getUsage(user.id)).remaining <= 0) return NextResponse.json({ places: [], pending: [], certain: [], checks: [], meta: {} });
   }
 
   let body: Record<string, unknown>;
@@ -28,10 +28,10 @@ export async function POST(req: Request) {
 
   try {
     const result = await extractMapData(prompt, files);
-    return NextResponse.json(result);
+    return NextResponse.json(result ?? { places: [], pending: [], certain: [], checks: [], meta: {} });
   } catch (err) {
     console.error("extract error:", err);
     // Degrade gracefully, the flow continues with whatever the user provided.
-    return NextResponse.json({ table: null, roles: null });
+    return NextResponse.json({ places: [], pending: [], certain: [], checks: [], meta: {} });
   }
 }

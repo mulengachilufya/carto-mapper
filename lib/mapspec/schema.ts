@@ -64,6 +64,10 @@ export const DecisionSchema = z.object({
 });
 export type Decision = z.infer<typeof DecisionSchema>;
 
+export const DEFAULT_MAP_FONT = "Carlito";
+/** A plausible font family name: letters, digits and spaces only. */
+const FONT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ]{1,40}$/;
+
 export const MapSpecSchema = z.object({
   version: z.literal(1).default(1),
 
@@ -146,6 +150,14 @@ export const MapSpecSchema = z.object({
       notes: z.string().optional(), // article / caption text the user wrote or we generated
     })
     .default({}),
+
+  /** Map fonts (Google Fonts family names). Carlito is a free, metric twin of Calibri. */
+  typography: z
+    .object({
+      title: z.string().regex(FONT_NAME).catch(DEFAULT_MAP_FONT).default(DEFAULT_MAP_FONT),
+      text: z.string().regex(FONT_NAME).catch(DEFAULT_MAP_FONT).default(DEFAULT_MAP_FONT),
+    })
+    .default({ title: DEFAULT_MAP_FONT, text: DEFAULT_MAP_FONT }),
 
   notes: z.string().optional(), // human-readable rationale
 
