@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { MapList } from "@/components/account/MapList";
+import { DeleteAccount } from "@/components/account/DeleteAccount";
 import { accountsEnabled, getCurrentUser } from "@/lib/supabase/server";
 import { listOwnJobs } from "@/lib/jobs";
 import { getUsage } from "@/lib/quota";
@@ -64,6 +65,7 @@ export default async function AccountPage() {
           </div>
 
           <MapList maps={maps} />
+          <DeleteAccount />
         </div>
       </main>
       <Footer />

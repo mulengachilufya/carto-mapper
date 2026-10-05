@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { accountsEnabled } from "@/lib/supabase/server";
 import { adminAuth, EMAIL_RE, errCode, normEmail, validPassword } from "@/lib/auth-server";
 import { isValidCountry, isValidRole } from "@/lib/profile-options";
+import { allow, clientIp, tooMany } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,9 @@ export async function POST(req: Request) {
   if (!isValidRole(b.role)) return bad("Please choose what best describes you.");
   if (!EMAIL_RE.test(email)) return bad("Please enter a valid email address.");
   if (!validPassword(b.password)) return bad("Your password needs 8 to 72 characters.");
+  // Throwaway accounts are the cheapest way to get more free maps: cap them per network and per address.
+  if (!(await allow(`signup:ip:${clientIp(req)}`, 5, 60 * 60))) return tooMany("new accounts from this network");
+  if (!(await allow(`signup:email:${email}`, 3, 24 * 60 * 60))) return tooMany("sign-ups for this email today");
 
   const { error } = await admin.createUser({
     email,

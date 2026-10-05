@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, EMAIL_RE, normEmail } from "@/lib/auth-server";
 import { resetCodeEmail, sendEmail } from "@/lib/email";
+import { allow, clientIp, tooMany } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,9 @@ export async function POST(req: Request) {
   const { email: raw } = (await req.json().catch(() => ({}))) as { email?: string };
   const email = normEmail(raw);
   if (!EMAIL_RE.test(email)) return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
+  // No one can flood an inbox with codes, or burn through our email quota.
+  if (!(await allow(`reset:email:${email}`, 3, 15 * 60))) return tooMany("code requests for this email");
+  if (!(await allow(`reset:ip:${clientIp(req)}`, 20, 60 * 60))) return tooMany("code requests");
   if (!process.env.RESEND_API_KEY) return NextResponse.json({ ok: true, fallback: true });
 
   const { data, error } = await admin.generateLink({ type: "recovery", email });

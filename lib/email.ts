@@ -48,7 +48,7 @@ export function welcomeEmail(to: string, firstName?: string | null): EmailMessag
 
 Welcome to CartoMapper. Your account is ready.
 
-Describe any place on Earth in a sentence, add whatever data you have (a spreadsheet, a report, a list of towns), and CartoMapper draws it the way a printed atlas would: real terrain, rivers, place names and a legend that means something.
+Describe the map you need in a sentence, add whatever data you have (a spreadsheet, a report, a list of places), and CartoMapper draws it in under three minutes, with a clear title, labels and a legend that means something.
 
 It's free. You can make up to ${DAILY_MAP_LIMIT} new maps a day, change them as often as you like, and download print-ready PDF and SVG files with no watermark. Every map is saved to My maps.
 
@@ -58,7 +58,7 @@ Happy mapping,
 The CartoMapper team`;
 
   const html = `<!doctype html><html><body style="margin:0;background:#ffffff;font-family:Georgia,'Times New Roman',serif;">
-<div style="display:none;max-height:0;overflow:hidden;">Your account is ready. Make up to ${DAILY_MAP_LIMIT} atlas-grade maps a day, free.</div>
+<div style="display:none;max-height:0;overflow:hidden;">Your account is ready. Make up to ${DAILY_MAP_LIMIT} maps a day, free.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 12px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe5e2;">
@@ -68,8 +68,8 @@ The CartoMapper team`;
   <tr><td style="padding:32px 32px 32px;">
     <h1 style="margin:0 0 16px;font-size:26px;line-height:1.25;color:#111614;font-weight:600;">Welcome, ${esc(name)}.</h1>
     <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
-      Your CartoMapper account is ready. Describe any place on Earth in a sentence, add whatever data you have, and
-      CartoMapper draws it the way a printed atlas would: real terrain, rivers, place names and a legend that means something.
+      Your CartoMapper account is ready. Describe the map you need in a sentence, add whatever data you have, and
+      CartoMapper draws it in under three minutes, with a clear title, labels and a legend that means something.
     </p>
     <p style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
       It's <strong style="color:#111614;">free</strong>. Make up to <strong style="color:#111614;">${DAILY_MAP_LIMIT} new maps a day</strong>,
@@ -79,7 +79,7 @@ The CartoMapper team`;
       <a href="${cta}" style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Make your first map</a>
     </td></tr></table>
   </td></tr>
-  <tr><td style="border-top:1px solid #dfe5e2;padding:18px 32px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#7a7266;">
+  <tr><td style="border-top:1px solid #dfe5e2;padding:18px 32px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#6b7571;">
     You're receiving this because you created a CartoMapper account with ${esc(to)}. Questions? Just reply.
   </td></tr>
 </table>
@@ -113,8 +113,8 @@ The CartoMapper team`;
     <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#46504c;">
       Hi ${esc(name)}, here is your code. Enter it on the reset page with your new password.
     </p>
-    <p style="margin:0 0 20px;font-family:'Courier New',monospace;font-size:34px;letter-spacing:10px;font-weight:bold;color:#1f5c4d;">${esc(code)}</p>
-    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#7a7266;">
+    <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:34px;letter-spacing:4px;font-weight:bold;color:#1f5c4d;">${esc(code)}</p>
+    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#6b7571;">
       The code works once and expires in an hour. If you didn't ask for this, ignore this email; your password stays the same.
     </p>
   </td></tr>
@@ -146,4 +146,35 @@ export async function sendWelcomeIfNew(user: User): Promise<boolean> {
   // Couldn't send: release the claim so a later sign-in can try again.
   if (!sent) await sb.from("profiles").update({ welcome_email_sent_at: null }).eq("id", user.id);
   return sent;
+}
+
+/** Sent after someone deletes their account, so they know it's done. */
+export function goodbyeEmail(to: string, firstName?: string | null): EmailMessage {
+  const name = firstName?.trim() || "there";
+  const text = `Hi ${name},
+
+Your CartoMapper account has been deleted, along with every map saved in it. Nothing else is needed from you.
+
+If you ever want to make maps again, you're welcome back any time: ${APP_URL}/signup
+
+The CartoMapper team`;
+  const html = `<!doctype html><html><body style="margin:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #dfe5e2;">
+  <tr><td style="background:#0e2620;padding:14px 20px;">
+    <img src="${APP_URL}/brand/cartomapper-logo-reversed.png" alt="CartoMapper" width="200" style="display:block;border:0;max-width:200px;height:auto;">
+  </td></tr>
+  <tr><td style="padding:32px;">
+    <h1 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.25;color:#111614;font-weight:600;">Your account is deleted</h1>
+    <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#46504c;">
+      Hi ${esc(name)}, your CartoMapper account has been deleted, along with every map saved in it. Nothing else is needed from you.
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#46504c;">
+      If you ever want to make maps again, you're welcome back any time at <a href="${APP_URL}/signup" style="color:#1f5c4d;">cartomapper.online</a>.
+    </p>
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
+  return { to, subject: "Your CartoMapper account is deleted", html, text };
 }

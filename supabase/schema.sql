@@ -1,5 +1,5 @@
 -- ============================================================
---  CartoMapper — Supabase schema
+--  CartoMapper Supabase schema
 --  Run this in the SQL editor of your CartoMapper Supabase
 --  project (NOT the Lenga Maps one). Safe to run again.
 -- ============================================================
@@ -91,3 +91,41 @@ create index if not exists map_jobs_user_created_idx on map_jobs (user_id, creat
 -- these tables directly, so the daily limit can't be bypassed from the browser.
 alter table profiles enable row level security;
 alter table map_jobs enable row level security;
+
+-- ─── Rate limits for the account endpoints ───────────────────
+-- lib/rate-limit.ts calls rate_hit() before sign-up, reset codes and
+-- account deletion. Keys arrive already hashed (no emails or IPs stored).
+create table if not exists rate_events (
+  key text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists rate_events_key_idx on rate_events (key, created_at desc);
+alter table rate_events enable row level security;
+
+create or replace function public.rate_hit(p_key text, p_window_seconds int, p_max int)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  -- One caller at a time per key, so parallel requests can't slip past the limit.
+  perform pg_advisory_xact_lock(hashtext(p_key));
+  select count(*) into n from rate_events
+    where key = p_key and created_at > now() - make_interval(secs => p_window_seconds);
+  if n >= p_max then
+    return false;
+  end if;
+  insert into rate_events (key) values (p_key);
+  -- Now and then, clear out anything older than a day.
+  if random() < 0.01 then
+    delete from rate_events where created_at < now() - interval '1 day';
+  end if;
+  return true;
+end;
+$$;
+
+-- Only the server (service role) may call it.
+revoke execute on function public.rate_hit(text, int, int) from public, anon, authenticated;
+grant execute on function public.rate_hit(text, int, int) to service_role;
