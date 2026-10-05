@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminAuth, anonClient, EMAIL_RE, normEmail, validPassword } from "@/lib/auth-server";
+import { allow, clientIp, tooMany } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
   if (!EMAIL_RE.test(email) || !/^\d{6,10}$/.test(code)) return NextResponse.json({ error: "Enter the code from the email." }, { status: 400 });
   if (!validPassword(b.password)) return NextResponse.json({ error: "Your new password needs 8 to 72 characters." }, { status: 400 });
 
+  // A 6-digit code can't be guessed in 10 tries an hour.
+  if (!(await allow(`reset-code:email:${email}`, 10, 60 * 60))) return tooMany("tries with this email");
+  if (!(await allow(`reset-code:ip:${clientIp(req)}`, 30, 60 * 60))) return tooMany("tries");
   const { data, error } = await anon.auth.verifyOtp({ email, token: code, type: "recovery" });
   const id = data?.user?.id;
   if (error || !id) return NextResponse.json({ error: "That code is wrong or has expired. Ask for a new one." }, { status: 400 });

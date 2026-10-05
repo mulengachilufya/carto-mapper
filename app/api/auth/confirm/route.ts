@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminAuth, anonClient, errCode, normEmail } from "@/lib/auth-server";
+import { allow, clientIp, tooMany } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
   const email = normEmail(b.email);
   if (!email || typeof b.password !== "string") return NextResponse.json({ ok: false }, { status: 400 });
 
+  if (!(await allow(`confirm:email:${email}`, 10, 60 * 60)) || !(await allow(`confirm:ip:${clientIp(req)}`, 30, 60 * 60))) return tooMany();
   const { error } = await anon.auth.signInWithPassword({ email, password: b.password });
   if (!error) return NextResponse.json({ ok: true });
   if (errCode(error) !== "email_not_confirmed") return NextResponse.json({ ok: false }, { status: 401 });

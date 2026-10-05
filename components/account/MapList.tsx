@@ -10,7 +10,7 @@ const STYLE_SWATCH: Record<string, string> = {
   dots: "radial-gradient(circle,#1f5c4d 38%,transparent 42%) 0 0/8px 8px,#ffffff",
   atlas: "linear-gradient(135deg,#a9c9a0 0%,#e8d9a6 45%,#c79a6b 75%,#9fc3d6 100%)",
   classic: "linear-gradient(135deg,#f3d9b1 0%,#cfe0b4 35%,#f1c6c3 65%,#bcd6ea 100%)",
-  minimal: "linear-gradient(135deg,#f4f6f5 0%,#d9d3c4 60%,#8a8171 100%)",
+  minimal: "linear-gradient(135deg,#ffffff 0%,#e4e8e6 60%,#6f7a75 100%)",
 };
 
 const TYPE_LABEL: Record<string, string> = {
