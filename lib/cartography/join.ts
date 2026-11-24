@@ -1,4 +1,5 @@
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import { asNumber, type Row } from "@/lib/data/parse";
 import type { GeoLevel } from "@/lib/mapspec/schema";
 import { buildNameIndex, matchFeature, normalizeName, type CountryFeature } from "@/lib/cartography/geo";
 
@@ -30,19 +31,19 @@ export function subdivisionMatcher(fc: FeatureCollection) {
 }
 
 function subdivisionIndex(fc: FeatureCollection) {
-  const exact = new Map<string, CountryFeature>();
+  const exact = new Map<string, CountryFeature | null>();
   const loose = new Map<string, CountryFeature | null>(); // null = ambiguous
   for (const f of fc.features as CountryFeature[]) {
     const n = normalizeName(f.properties?.name ?? "");
     if (!n) continue;
-    if (!exact.has(n)) exact.set(n, f);
+    exact.set(n, exact.has(n) && exact.get(n) !== f ? null : f);
     const s = strip(n);
     if (s) loose.set(s, loose.has(s) && loose.get(s) !== f ? null : f);
   }
   return (name: string): CountryFeature | undefined => {
     const n = normalizeName(name);
     if (!n) return undefined;
-    return exact.get(n) ?? loose.get(strip(n)) ?? undefined;
+    return (exact.has(n) ? exact.get(n) : loose.get(strip(n))) ?? undefined;
   };
 }
 
@@ -79,8 +80,42 @@ export function chooseJoin(
   const unique = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
   const scored = candidates.map((c) => ({ c, hits: unique.filter((n) => c.match(n)).length }));
   const preferred = level === "admin1" ? "adm1" : level === "admin2" ? "adm2" : null;
-  const pref = scored.find((s) => s.c.level === preferred && s.hits > 0);
-  if (pref) return pref.c;
+  if (preferred) {
+    const selected = candidates.find((c) => c.level === preferred);
+    if (selected) return selected;
+    return { level: preferred, features: [], match: () => undefined, keyOf: () => "" };
+  }
   // Most matches wins; ties go to the coarser level (country, then provinces).
   return scored.reduce((best, s) => (s.hits > best.hits ? s : best)).c;
+}
+
+/** Use the same joined values for drawing, classification, and the preview audit. */
+export function joinValues(rows: Row[], join: RegionJoin, nameField: string, valueField: string) {
+  const values = new Map<string, number>();
+  const unmatched = new Set<string>();
+  const conflicts = new Map<string, string>();
+  let missing = 0;
+  for (const row of rows) {
+    const name = String(row[nameField] ?? "").trim();
+    const feature = join.match(name);
+    if (!feature) {
+      unmatched.add(name || "(blank)");
+      continue;
+    }
+    const value = asNumber(row[valueField]);
+    if (value === null) {
+      missing++;
+      continue;
+    }
+    const key = join.keyOf(feature);
+    if (conflicts.has(key)) continue;
+    const prior = values.get(key);
+    if (prior !== undefined && prior !== value) {
+      values.delete(key);
+      conflicts.set(key, feature.properties.name);
+    } else {
+      values.set(key, value);
+    }
+  }
+  return { values, unmatched: [...unmatched], conflicts: [...conflicts.values()], missing };
 }

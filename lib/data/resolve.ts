@@ -1,7 +1,7 @@
 import { geoBounds, geoCentroid, geoContains } from "d3-geo";
 import type { Feature, FeatureCollection } from "geojson";
 import type { GeoLevel } from "@/lib/mapspec/schema";
-import type { ColumnRoles, ParsedTable, Row } from "@/lib/data/parse";
+import { asCoordinate, type ColumnRoles, type ParsedTable, type Row } from "@/lib/data/parse";
 import {
   buildNameIndex,
   CONTINENT_BBOX,
@@ -60,7 +60,7 @@ export async function resolvePlaces(
 
   // ── Coordinates: nothing to match, just find where they are. ──
   if (roles.latField && roles.lonField) {
-    const pts = table.rows.map((r) => [Number(r[roles.lonField!]), Number(r[roles.latField!])] as [number, number]);
+    const pts = table.rows.map((r) => [asCoordinate(r[roles.lonField!]) ?? NaN, asCoordinate(r[roles.latField!]) ?? NaN] as [number, number]);
     const ok = pts.map(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && Math.abs(y) <= 90 && Math.abs(x) <= 180);
     const where = locate(geo, pts.filter((_, i) => ok[i]));
     return {
@@ -89,7 +89,7 @@ export async function resolvePlaces(
   const gaz = await loadGazetteer();
   let candidate: string | undefined;
   const fromPrompt = ctx.prompt ? detectPlace(ctx.prompt) : {};
-  if (fromPrompt.level === "country" && fromPrompt.region) candidate = findCountry(geo, fromPrompt.region)?.properties.name;
+  if (fromPrompt.level && ["country", "admin1", "admin2"].includes(fromPrompt.level) && fromPrompt.region) candidate = findCountry(geo, fromPrompt.region)?.properties.name;
   if (!candidate && gaz) {
     const votes = new Map<string, number>();
     for (const n of unique) {
@@ -130,8 +130,9 @@ export async function resolvePlaces(
   // towns → districts: many districts share their town's name, and a list of places
   // more often means sites than district boundaries.
   const order: PlaceKind[] = ["countries", "provinces", "towns", "districts"];
+  const preferred = fromPrompt.level === "admin2" ? "districts" : fromPrompt.level === "admin1" ? "provinces" : undefined;
   const reading =
-    readings.find((r) => r.kind === ctx.prefer && r.matched > 0) ??
+    readings.find((r) => r.kind === (ctx.prefer ?? preferred) && r.matched > 0) ??
     [...readings].sort((a, b) => b.matched - a.matched || order.indexOf(a.kind) - order.indexOf(b.kind))[0];
   const matchedSet = new Set(
     reading.kind === "countries" ? countryHits : reading.kind === "provinces" ? provinceHits : reading.kind === "districts" ? districtHits : [...townOf.keys()],
@@ -150,7 +151,7 @@ export async function resolvePlaces(
       const c = townOf.get(String(r[field] ?? "").trim());
       return { ...r, Latitude: c ? c[1] : null, Longitude: c ? c[0] : null };
     });
-    outTable = { columns: [...table.columns.filter((c) => c !== "Latitude" && c !== "Longitude"), "Latitude", "Longitude"], rows, rowCount: rows.length };
+    outTable = { ...table, locationSource: "natural-earth-places", columns: [...table.columns.filter((c) => c !== "Latitude" && c !== "Longitude"), "Latitude", "Longitude"], rows, rowCount: rows.length };
     outRoles = { ...roles, latField: "Latitude", lonField: "Longitude" };
     const where = locate(geo, [...townOf.values()]);
     level = where.level;

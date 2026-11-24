@@ -36,22 +36,11 @@ function keysFor(name: string): string[] {
   return stripped && stripped !== n ? [n, stripped] : [n];
 }
 
-/**
- * Find a town by name. Ambiguous names ("San Jose", "Victoria") resolve to the one
- * in the preferred country if there is one, else the most important.
- */
+/** Match the name of a populated place. Leave ambiguous and approximate matches unresolved. */
 export function geocode(g: Gazetteer, name: string, preferIso?: string): GazetteerPlace | undefined {
-  const tries = [normalizeName(name), ...keysFor(name)];
-  // "Kitwe Central Clinic", "Ndola depot": fall back to the leading words.
-  const words = normalizeName(name).split(" ");
-  for (let n = words.length - 1; n >= 1; n--) tries.push(words.slice(0, n).join(" "));
-  for (const key of tries) {
-    const hits = g.byName.get(key);
-    if (!hits?.length) continue;
-    const local = preferIso ? hits.filter((h) => h[6] === preferIso) : [];
-    const pool = local.length ? local : preferIso && key !== tries[0] ? [] : hits;
-    if (!pool.length) continue;
-    return [...pool].sort((a, b) => b[5] - a[5] || a[4] - b[4] || b[3] - a[3])[0];
+  for (const key of keysFor(name)) {
+    const hits = g.byName.get(key)?.filter((place) => !preferIso || place[6] === preferIso);
+    if (hits?.length) return hits.length === 1 ? hits[0] : undefined;
   }
   return undefined;
 }

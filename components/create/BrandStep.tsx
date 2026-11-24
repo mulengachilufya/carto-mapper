@@ -47,7 +47,7 @@ export function BrandStep({ title, organisation, logoDataUrl, notes, onChange, o
           <input
             value={organisation}
             onChange={(e) => onChange({ organisation: e.target.value })}
-            placeholder="e.g. Lenga Maps"
+            placeholder="e.g. Meridian Press"
             className={INPUT}
           />
         </Field>

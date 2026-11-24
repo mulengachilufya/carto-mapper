@@ -79,6 +79,8 @@ function readBase64(file: File): Promise<ContextFile> {
 
 export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, onData, onFilesChange, onNext, extracting }: Props) {
   const [paste, setPaste] = useState("");
+  const [parsedPaste, setParsedPaste] = useState("");
+  const readingPaste = Boolean(paste.trim()) && parsedPaste !== paste;
   const [raw, setRaw] = useState<{ table: ParsedTable; roles: ColumnRoles } | null>(null);
   const [prefer, setPrefer] = useState<PlaceKind | undefined>(undefined);
   // A resolution remembers which data + reading it was computed for, so "still
@@ -91,7 +93,8 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
   // Parse the paste box as the user types (tables, lists, coordinates or prose).
   useEffect(() => {
     if (!paste.trim()) return;
-    const t = setTimeout(() => {
+    let alive = true;
+    const t = setTimeout(async () => {
       const parsed = parseAnything(paste);
       if (parsed && parsed.rowCount) {
         setNote(null);
@@ -99,16 +102,23 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
         setRaw({ table: parsed, roles: inferColumns(parsed) });
       } else if (geo) {
         // Prose: find the places mentioned in it.
-        placesInProse(paste, geo).then((names) => {
-          if (names.length) {
-            const t2: ParsedTable = { columns: ["Place"], rows: names.map((n) => ({ Place: n })), rowCount: names.length };
-            setNote(null);
-            setRaw({ table: t2, roles: { nameField: "Place" } });
-          } else setNote("We couldn't find any places in that text yet. Try a list of names, a table or coordinates.");
-        });
+        const names = await placesInProse(paste, geo).catch(() => []);
+        if (!alive) return;
+        if (names.length) {
+          const t2: ParsedTable = { columns: ["Place"], rows: names.map((n) => ({ Place: n })), rowCount: names.length };
+          setNote(null);
+          setPrefer(undefined);
+          setRaw({ table: t2, roles: { nameField: "Place" } });
+        } else {
+          setNote("We couldn't find any places in that text yet. Try a list of names, a table or coordinates.");
+        }
       }
+      setParsedPaste(paste);
     }, 350);
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, [paste, geo]);
 
   // Work out what the places are, whenever the data, the roles or the chosen reading change.
@@ -180,7 +190,7 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
         <p className="eyebrow text-accent">Step one</p>
         <h2 className="display mt-2 text-4xl font-semibold text-ink">What should the map show?</h2>
         <p className="mt-2 max-w-2xl text-muted">
-          A sentence is enough: the places, the thing you&apos;re measuring, and who it&apos;s for. We&apos;ll work out the rest.
+          Describe the story and who it&apos;s for. Add the records or values you want to map in the next section.
         </p>
         <textarea
           value={prompt}
@@ -289,7 +299,7 @@ export function BriefStep({ geo, prompt, table, roles, files, onPromptChange, on
 
       <div className="flex items-center justify-end gap-4 border-t border-line pt-6">
         {!canContinue && <p className="text-sm text-muted">Describe the map or add some data to continue.</p>}
-        <Button onClick={onNext} disabled={!canContinue || extracting || resolving} size="lg">
+        <Button onClick={onNext} disabled={!canContinue || extracting || readingPaste || resolving} size="lg">
           {extracting ? "Reading your files…" : "Continue →"}
         </Button>
       </div>

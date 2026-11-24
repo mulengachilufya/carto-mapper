@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { applyRevisionHeuristic, type GenerateInput } from "@/lib/mapspec/generate";
-import { plan, finalize } from "@/lib/engine";
+import { plan, finalize, noDash } from "@/lib/engine";
+import { missingMapInput } from "@/lib/engine/evidence";
 import { generateMapSpecWithClaude, hasAnthropic } from "@/lib/mapspec/claude";
 import { parseMapSpec, MAP_TYPES, MAP_STYLES, GEO_LEVELS, type Decision, type MapSpec } from "@/lib/mapspec/schema";
 import { paletteKind, PALETTES_BY_KIND } from "@/lib/cartography/palettes";
@@ -68,7 +69,9 @@ export async function POST(req: Request) {
     !revision && body.mapTypeLocked && typeof body.mapType === "string" && (MAP_TYPES as readonly string[]).includes(body.mapType)
       ? (body.mapType as MapSpec["mapType"])
       : undefined;
-  const baseline = lockedType ? parseMapSpec({ ...run.plan.spec, mapType: lockedType }) : run.plan.spec;
+  const missing = missingMapInput(run.brief, input.table, input.roles);
+  if (missing) return NextResponse.json({ error: "needsData", message: missing }, { status: 422 });
+  const baseline = lockedType && (input.table?.rows.length || lockedType === "reference") ? parseMapSpec({ ...run.plan.spec, mapType: lockedType }) : run.plan.spec;
 
   let spec: MapSpec;
   let engine: "claude" | "rules" = "rules";
@@ -95,7 +98,10 @@ export async function POST(req: Request) {
   // Branding and the user's own furniture toggles always win.
   if (body.branding && typeof body.branding === "object") spec = parseMapSpec({ ...spec, branding: body.branding });
   if (body.outputOptions) spec = parseMapSpec({ ...spec, furniture: { ...spec.furniture, ...(body.outputOptions as object) } });
-  if (lockedType) spec = parseMapSpec({ ...spec, mapType: lockedType });
+  if (lockedType && (input.table?.rows.length || lockedType === "reference")) spec = parseMapSpec({ ...spec, mapType: lockedType });
+  if (!input.table?.rows.length) {
+    spec = parseMapSpec({ ...spec, mapType: baseline.mapType, data: baseline.data });
+  }
   // The AI may not drag a first draft back to terrain-and-rivers looks the customer never asked for.
   const OLD_LOOKS = ["atlas", "classic", "minimal"];
   if (!revision && !run.brief.style && OLD_LOOKS.includes(spec.style) && !OLD_LOOKS.includes(baseline.style))
@@ -107,8 +113,12 @@ export async function POST(req: Request) {
   // ("Public Universities in Zambia, 2026"); anything that reads like a question or a pitch
   // falls back to the rulebook's.
   const titleAsked = Boolean(revision?.revisionRequest && /title|call it|name it|heading/i.test(revision.revisionRequest));
-  if (userTitle && !titleAsked) spec = parseMapSpec({ ...spec, title: userTitle });
+  if (userTitle && !titleAsked) spec = parseMapSpec({ ...spec, title: noDash(userTitle) });
   else if (!titleAsked && !isPlainTitle(spec.title)) spec = parseMapSpec({ ...spec, title: (revision?.previousSpec.title && isPlainTitle(revision.previousSpec.title) ? revision.previousSpec.title : run.plan.spec.title) });
+
+  if (revision && !/\b(layout|composition|page design|atlas plate)\b/i.test(revision.revisionRequest ?? "")) {
+    spec = parseMapSpec({ ...spec, page: { ...spec.page, layout: revision.previousSpec.page.layout } });
+  }
 
   // Fonts: what the customer picked, kept through every change.
   const FONT = /^[A-Za-z0-9][A-Za-z0-9 ]{1,40}$/;
@@ -134,7 +144,7 @@ export async function POST(req: Request) {
     });
   }
   // Rows implied by the brief itself ("where we work: Kenya, Uganda, Tanzania").
-  const rows = !input.table?.rows.length && !revision ? run.plan.rows ?? null : null;
+  const rows = !input.table?.rows.length ? run.plan.rows ?? null : null;
 
   // Save the map to the user's account. A change to a map they own updates it; anything
   // else is a new map, which counts toward today's limit.

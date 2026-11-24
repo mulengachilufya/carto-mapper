@@ -5,7 +5,7 @@ import { useCountries } from "@/components/cartography/useCountries";
 import { Stepper } from "./Stepper";
 import { BriefStep, type ContextFile } from "./BriefStep";
 import { LookStep } from "./LookStep";
-import type { Place, RawExtract } from "@/lib/mapspec/extract";
+import type { RawExtract } from "@/lib/mapspec/extract";
 import { buildResult } from "@/lib/mapspec/extractTable";
 import { BrandStep } from "./BrandStep";
 import { PreviewStep } from "./PreviewStep";
@@ -14,7 +14,7 @@ import type { MapSpec, GeoLevel } from "@/lib/mapspec/schema";
 import { resolvePlaces, type Resolution } from "@/lib/data/resolve";
 import type { Usage } from "@/lib/quota";
 import { readBrief } from "@/lib/engine/brief";
-import { illustrativeData } from "@/lib/data/illustrative";
+import { Button } from "@/components/ui/Button";
 
 interface Brand {
   title: string;
@@ -65,8 +65,7 @@ export function CreateWizard() {
   // Where the data says the map is (e.g. "the counties of Kenya"), found by the resolver.
   const [resolution, setResolution] = useState<Resolution | null>(null);
   const [extracting, setExtracting] = useState(false);
-  // What the fact-check removed or corrected, shown so nothing changes silently.
-  const [checks, setChecks] = useState<string[]>([]);
+  const [extractionDraft, setExtractionDraft] = useState<RawExtract | null>(null);
 
   const [spec, setSpec] = useState<MapSpec | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -135,19 +134,18 @@ export function CreateWizard() {
         setError(String(json.message ?? "You've reached today's limit."));
         return;
       }
+      if (res.status === 422) {
+        setError(String(json.message));
+        setStep(0);
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      let next = json.spec as MapSpec;
+      const next = json.spec as MapSpec;
       if (!opts?.previousSpec) {
-        // Data the brief itself implied (a list of countries), or illustrative values.
+        // Country names supplied explicitly in a footprint brief.
         let s2: { table: ParsedTable; roles: ColumnRoles } | null = null;
         if (!table && Array.isArray(json.rows) && json.rows.length) {
           s2 = { table: { columns: Object.keys(json.rows[0]), rows: json.rows, rowCount: json.rows.length }, roles: { nameField: next.data.nameField } };
-        } else if (!table && next.data.illustrative && geo) {
-          const ill = await illustrativeData(next, geo).catch(() => null);
-          if (ill) {
-            s2 = { table: ill.table, roles: ill.roles };
-            next = ill.spec;
-          }
         }
         setSample(s2);
       }
@@ -188,9 +186,7 @@ export function CreateWizard() {
 
   async function startMapType() {
     setError(null);
-    // Read uploaded reports/articles/images (and a prompt with no structured data) with Claude.
-    const needsExtract = files.length > 0 || (prompt.trim().length >= 3 && !table);
-    if (needsExtract) {
+    if (!table && files.length) {
       setExtracting(true);
       try {
         const res = await fetch("/api/extract", {
@@ -198,51 +194,41 @@ export function CreateWizard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, files }),
         });
-        if (res.ok) {
-          const raw = (await res.json()) as RawExtract;
-          let places = raw.places ?? [];
-          const notes = [...(raw.checks ?? [])];
-          // Places the AI listed from memory go through an independent fact-check first.
-          if (raw.pending?.length) {
-            const chk = await fetch("/api/extract/check", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt, places: raw.pending }),
-            }).catch(() => null);
-            if (chk?.ok) {
-              const c = (await chk.json()) as { places: Place[]; checks: string[] };
-              places = places.concat(c.places ?? []);
-              notes.push(...(c.checks ?? []));
-            } else {
-              const certain = new Set(raw.certain ?? []);
-              for (const p of raw.pending) {
-                if (certain.has(p.name)) places.push(p);
-                else notes.push(`Left out "${p.name}": could not double-check it.`);
-              }
-            }
-          }
-          setChecks(notes);
-          const ex = buildResult({ ...(raw.meta ?? {}), places });
-          if (ex.table && ex.roles) {
-            // Run what the AI read through the same place resolver as pasted data:
-            // geocode the towns and find the geography (e.g. the districts of Uganda).
-            const res2 = geo
-              ? await resolvePlaces(ex.table as ParsedTable, ex.roles as ColumnRoles, { geo, prompt }).catch(() => null)
-              : null;
-            setTable(res2?.table ?? (ex.table as ParsedTable));
-            setRoles(res2?.roles ?? (ex.roles as ColumnRoles));
-            setResolution(res2);
-          }
-          if (ex.mapType) setMapType((t) => t ?? String(ex.mapType));
+        if (!res.ok) throw new Error("Extraction failed");
+        const draft = (await res.json()) as RawExtract;
+        if (!draft.places?.length) {
+          setError("I couldn't read any usable records from the files. Paste a list or upload a table.");
+          return;
         }
+        setExtractionDraft(draft);
       } catch {
-        /* extraction is best-effort */
+        setError("I couldn't read the attachments. Try again or upload a table.");
       } finally {
         setExtracting(false);
       }
+      return;
     }
     setMapType((t) => t ?? recommended);
     setStep(1);
+  }
+
+  async function acceptExtraction(draft: RawExtract) {
+    const result = buildResult({ ...draft.meta, places: draft.places });
+    if (!result.table || !result.roles) return;
+    setExtracting(true);
+    try {
+      const resolved = geo
+        ? await resolvePlaces(result.table, result.roles, { geo, prompt }).catch(() => null)
+        : null;
+      setTable(resolved?.table ?? result.table);
+      setRoles(resolved?.roles ?? result.roles);
+      setResolution(resolved);
+      setMapType(result.mapType ?? null);
+      setExtractionDraft(null);
+      setStep(1);
+    } finally {
+      setExtracting(false);
+    }
   }
 
   return (
@@ -268,17 +254,6 @@ export function CreateWizard() {
         </p>
       )}
 
-      {checks.length > 0 && step >= 1 && step < 3 && (
-        <div className="mx-auto mt-5 max-w-2xl rounded-lg border border-line bg-paper-2 px-4 py-3 text-sm text-ink">
-          <p className="font-semibold">We double-checked the places before drawing them</p>
-          <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-muted">
-            {checks.slice(0, 8).map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {error && (
         <p className="mx-auto mt-5 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {error}
@@ -286,7 +261,29 @@ export function CreateWizard() {
       )}
 
       <div className="mt-8">
-        {step === 0 && (
+        {step === 0 && extractionDraft && (
+          <section className="mx-auto max-w-3xl">
+            <h2 className="display text-3xl font-semibold text-ink">Review extracted records</h2>
+            <p className="mt-2 text-muted">Compare the places and values with your files before using them on a map.</p>
+            {extractionDraft.checks?.map((check) => <p key={check} className="mt-2 text-sm text-muted">{check}</p>)}
+            <ul className="mt-4 max-h-96 divide-y divide-line overflow-auto rounded-lg border border-line">
+              {extractionDraft.places.map((place, index) => (
+                <li key={index} className="px-4 py-3">
+                  <p className="font-medium text-ink">
+                    {[place.name, place.value, place.category, place.lat != null && place.lon != null ? `${place.lat}, ${place.lon}` : null]
+                      .filter((value) => value != null).join(" · ")}
+                  </p>
+                  <p className="mt-1 text-sm text-muted">{place.file} · {place.evidence}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-between gap-3">
+              <Button variant="ghost" disabled={extracting} onClick={() => setExtractionDraft(null)}>Back to files</Button>
+              <Button disabled={extracting} onClick={() => acceptExtraction(extractionDraft)}>Use these records</Button>
+            </div>
+          </section>
+        )}
+        {step === 0 && !extractionDraft && (
           <BriefStep
             geo={geo}
             prompt={prompt}

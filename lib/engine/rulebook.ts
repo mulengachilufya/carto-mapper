@@ -93,18 +93,18 @@ export function design(f: Facts): Design {
 
   // ── T. Map type: the shape of the data, then the intent of the sentence ──
   let mapType: MapType;
-  let illustrative = false;
+  const illustrative = f.table?.illustrative === true;
   if (hasTable && hasCoords) {
     mapType = hasCategory ? "categorical_point" : hasValue ? "proportional_symbol" : "point";
     log("T1", "Map type", label(mapType), hasCategory ? "Your sites carry a category, so each is coloured by it." : hasValue ? "Your sites carry a quantity; circle area is drawn proportional to it, so a site with twice the value looks twice as big." : "Your data are locations, so each is marked and named.", "data");
   } else if (hasTable && hasName && hasValue) {
     const counts = profile?.value && !profile.value.looksLikeShare && brief.theme?.count;
-    if (counts && level === "world") {
+    if (counts) {
       mapType = "proportional_symbol";
-      log("T2", "Map type", label(mapType), "Your values are totals. Shading countries of very different size by a total misleads the eye, so they are drawn as circles at each country's centre instead.", "rules");
+      log("T2", "Map type", label(mapType), "Your values are totals. Symbol area encodes raw totals without implying that larger regions have higher rates.", "rules");
     } else {
       mapType = "choropleth";
-      log("T2", "Map type", label(mapType), counts ? "Your values are totals over areas of different size. The map shades them as asked; consider rates (per 1,000 people or per km²) for a fairer picture." : "Your data give a value for each area, so each area is shaded by it.", "data");
+      log("T2", "Map type", label(mapType), "Each area is shaded by its supplied value.", "data");
     }
   } else if (hasTable && hasName) {
     mapType = "footprint";
@@ -113,15 +113,6 @@ export function design(f: Facts): Design {
     mapType = "footprint";
     rows = brief.countries.map((c) => ({ Country: c }));
     log("T3", "Map type", label(mapType), `The countries you named are highlighted: ${list(brief.countries)}.`, "brief");
-  } else if (brief.intent === "thematic") {
-    mapType = level === "country" || level === "city" ? "proportional_symbol" : "choropleth";
-    if (mapType === "choropleth" && level === "country") level = "admin1";
-    illustrative = true;
-    log("T4", "Map type", label(mapType), `You described ${brief.theme ? brief.theme.label.toLowerCase() : "a subject"} but gave no numbers, so the map is drawn with clearly labelled illustrative values in the right places, replace them with your data.`, "rules");
-  } else if (brief.intent === "locations") {
-    mapType = "point";
-    illustrative = true;
-    log("T5", "Map type", label(mapType), "You described sites but gave no locations; illustrative sites are placed until you add yours.", "rules");
   } else {
     mapType = "reference";
     if (level === "country" && brief.place?.kind === "country") level = "admin1";
@@ -164,8 +155,7 @@ export function design(f: Facts): Design {
     } else {
       log("C3", "Classes", `${classes} quantiles`, `Your ${v.count} values are evenly spread; quantiles give each colour a similar number of places.`, "data");
     }
-  } else if (mapType === "choropleth") {
-    log("C4", "Classes", "5 quantiles", "Illustrative values: five classes, each holding a similar number of places.", "rules");
+
   }
 
   // ── K. Colour: your words, then the subject's convention, then the data's sign ──
@@ -207,6 +197,9 @@ export function design(f: Facts): Design {
 
   // ── F. Furniture: the conventions of scale ──
   const small = level === "world" || level === "continent";
+  const featureBrief = /\b(story|editorial feature|magazine|poster|social|slide|presentation|deck)\b/i.test(brief.text);
+  const reportBrief = /\b(report|audit|paper|appendix|technical|publication)\b/i.test(brief.text);
+  const layout = featureBrief ? "feature" : reportBrief ? "report" : "centered";
   const furniture: MapSpec["furniture"] = {
     title: true,
     legend: mapType !== "reference",
@@ -249,18 +242,25 @@ export function design(f: Facts): Design {
   ].filter(Boolean);
   log("N1", "Title", title, f.userTitle ? "Your title." : "What, by what unit and where: the way an atlas titles a plate.", f.userTitle ? "brief" : "rules");
 
+  const metricLabel = roles.valueField && v?.looksLikeShare === "percent"
+    ? `${metric ?? titleOf(roles.valueField)} (%)`
+    : metric;
   const valueLabel =
     mapType === "categorical_point"
       ? roles.categoryField ? humanize(roles.categoryField) : "Type"
-      : metric
-        ? `${metric}${brief.theme?.unit && !roles.valueField ? ` (${brief.theme.unit})` : ""}`
+      : metricLabel
+        ? `${metricLabel}${brief.theme?.unit && !roles.valueField ? ` (${brief.theme.unit})` : ""}`
         : undefined;
 
   const spec = parseMapSpec({
     version: 1,
     title,
     subtitle: subtitleParts.join(" · ") || undefined,
-    source: illustrative ? "Illustrative data · Boundaries: Natural Earth" : hasTable ? "Data: your data · Boundaries: Natural Earth" : "Boundaries: Natural Earth",
+    source: [
+      illustrative ? "Illustrative data" : hasTable ? "Data: your data" : null,
+      "Boundaries: Natural Earth",
+      f.table?.locationSource === "natural-earth-places" ? "Town locations: Natural Earth" : null,
+    ].filter(Boolean).join(" · "),
     mapType,
     style,
     geography: { level, region },
@@ -271,12 +271,12 @@ export function design(f: Facts): Design {
       latField: roles.latField,
       lonField: roles.lonField,
       valueLabel,
-      valueFormat: v?.looksLikeShare === "fraction" ? ".0%" : brief.theme?.format ?? ",",
+      valueFormat: v?.looksLikeShare === "fraction" ? ".1%" : ",~g",
       illustrative: illustrative || undefined,
     },
     symbology: { palette, paletteKind: kindOf(palette), classes, classification, reverse, minRadius: 2, maxRadius: 26 },
     furniture,
-    page: { size: "A4", orientation },
+    page: { size: "A4", orientation, layout },
     decisions,
   });
   return { spec, decisions, rows };

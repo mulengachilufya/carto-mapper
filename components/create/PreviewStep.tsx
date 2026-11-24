@@ -7,7 +7,7 @@ import { LOOKS } from "./looks";
 import { FontPicker } from "./FontPicker";
 import { CartoMap } from "@/components/cartography/CartoMap";
 import { useSubdivisions } from "@/components/cartography/useSubdivisions";
-import { chooseJoin } from "@/lib/cartography/join";
+import { chooseJoin, joinValues } from "@/lib/cartography/join";
 import { exportSvgToPdf, pagePt } from "@/lib/pdf-client";
 import { downloadSvgFile } from "@/lib/svg-download";
 import { CHANGES_PER_MAP } from "@/lib/quota-rules";
@@ -57,12 +57,15 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
   // For region maps, how many place names matched a country / province / district?
   const coverage = useMemo(() => {
     const field = spec.data.nameField;
-    if (!geo || (spec.mapType !== "choropleth" && spec.mapType !== "footprint") || !field) return null;
+    const measured = spec.mapType === "choropleth" ||
+      ((spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol") && !(spec.data.latField && spec.data.lonField));
+    if (!geo || (!measured && spec.mapType !== "footprint") || !field) return null;
     const names = Array.from(new Set(data.map((r) => r[field]).filter((v) => v != null).map(String)));
     const join = chooseJoin(names, geo, subdivisions, spec.geography.level);
     const noun = join.level === "adm1" ? "provinces/states" : join.level === "adm2" ? "districts" : "countries";
-    return { total: names.length, matched: names.filter((n) => join.match(n)).length, noun };
-  }, [geo, subdivisions, spec.mapType, spec.data.nameField, spec.geography.level, data]);
+    const audit = measured && spec.data.valueField ? joinValues(data, join, field, spec.data.valueField) : null;
+    return { total: names.length, matched: names.filter((n) => join.match(n)).length, noun, audit };
+  }, [geo, subdivisions, spec.mapType, spec.data, spec.geography.level, data]);
 
   const setFurniture = (key: keyof Furniture, value: boolean) =>
     setSpec(parseMapSpec({ ...spec, furniture: { ...spec.furniture, [key]: value } }));
@@ -124,10 +127,13 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
               </details>
             )
           )}
-          {coverage && coverage.matched < coverage.total && (
-            <p className="mt-2 text-[13px] text-amber-700">
-              Matched {coverage.matched} of {coverage.total} place names to {coverage.noun}. Unmatched places stay uncoloured (shown as “No data”). Check the spelling against official names.
-            </p>
+          {coverage && (
+            <div className="mt-2 space-y-1 text-sm text-muted">
+              <p>Matched {coverage.matched} of {coverage.total} place names to {coverage.noun}.</p>
+              {!!coverage.audit?.unmatched.length && <p>Unmatched: {coverage.audit.unmatched.slice(0, 8).join(", ")}.</p>}
+              {!!coverage.audit?.conflicts.length && <p>Conflicting values left unmapped: {coverage.audit.conflicts.slice(0, 8).join(", ")}.</p>}
+              {!!coverage.audit?.missing && <p>{coverage.audit.missing} matched {coverage.audit.missing === 1 ? "row has" : "rows have"} no usable value.</p>}
+            </div>
           )}
         </div>
 
@@ -157,8 +163,15 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
               stacked
               title={spec.typography.title}
               text={spec.typography.text}
-              onChange={(f) => setSpec(parseMapSpec({ ...spec, typography: f }))}
+              onChange={(f) => setSpec(parseMapSpec({ ...spec, typography: { ...spec.typography, ...f } }))}
             />
+            <div className="mt-3">
+              <Segmented
+                value={spec.typography.scale}
+                options={[{ value: "standard", label: "Standard text" }, { value: "large", label: "Larger text" }]}
+                onChange={(scale) => setSpec(parseMapSpec({ ...spec, typography: { ...spec.typography, scale } }))}
+              />
+            </div>
           </Panel>
 
           <Panel title="Map elements">
@@ -171,6 +184,11 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
 
           <Panel title="Page">
             <div className="space-y-3">
+              <Segmented
+                value={spec.page.layout}
+                options={[{ value: "centered", label: "Atlas" }, { value: "feature", label: "Feature" }, { value: "report", label: "Report" }]}
+                onChange={(layout) => setPage({ layout: layout as MapSpec["page"]["layout"] })}
+              />
               <Segmented
                 value={spec.page.orientation}
                 options={[
@@ -222,7 +240,7 @@ export function PreviewStep({ geo, spec, data, setSpec, onRevise, onBack, onDown
             </Button>
           </div>
           <span className="text-xs text-muted">
-            Vector PDF for print, no watermark{saved ? " · saved to My maps" : ""}
+            Vector PDF for print{saved ? " · saved to My maps" : ""}
           </span>
         </div>
       </div>

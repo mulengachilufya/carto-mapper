@@ -1,0 +1,58 @@
+[
+  {
+    "id": "visual-hierarchy",
+    "appliesTo": ["all"],
+    "source": "Indiemapper, Visual Hierarchy",
+    "url": "https://www.axismaps.com/guide/visual-hierarchy",
+    "guidance": "Give the visual subject the strongest contrast. Put contextual boundaries, grids, and secondary places lower in the visual hierarchy. Verify at the size the audience will actually see.",
+    "example": "For a report about three affected counties, use one prominent fill for the counties and quieter outlines for their neighbours. Start the reader at the headline and the evidence."
+  },
+  {
+    "id": "map-story",
+    "appliesTo": ["all"],
+    "source": "Segel and Heer, Narrative Visualization",
+    "url": "https://doi.org/10.1109/TVCG.2010.179",
+    "guidance": "Use the title and a small number of annotations to direct attention, while preserving enough surrounding context to let readers inspect the evidence. Only state conclusions supported by the supplied data.",
+    "example": "Use a regional locator when local geography is unfamiliar. Use a descriptive annotation for a documented change, and leave out a causal claim that the inputs cannot support."
+  },
+  {
+    "id": "quantitative-colour",
+    "appliesTo": ["choropleth", "graduated_symbol"],
+    "source": "ColorBrewer 2.0",
+    "url": "https://colorbrewer2.org/",
+    "guidance": "Match the ramp to the structure of the data. Use ordered lightness for magnitudes and a justified midpoint for diverging values. Give missing observations their own treatment and keep true zeros in the data scale.",
+    "example": "A map of values above and below a policy target can diverge around the documented target. A map of positive access rates uses an ordered scale."
+  },
+  {
+    "id": "choropleth-rates",
+    "appliesTo": ["choropleth", "proportional_symbol"],
+    "source": "Axis Maps, Choropleth Maps",
+    "url": "https://www.axismaps.com/guide/choropleth",
+    "guidance": "Use rates or normalized values where appropriate for area fill. Show comparable raw totals with symbols sized by area. Derive a rate only if the numerator and denominator describe the same place, period, and population.",
+    "example": "County unemployment totals and county unemployment rates are different stories. Use an area fill for the documented rate and sized symbols for totals."
+  },
+  {
+    "id": "point-hierarchy",
+    "appliesTo": ["point", "proportional_symbol", "graduated_symbol", "categorical_point", "dot"],
+    "source": "Axis Maps, Proportional Symbol Maps",
+    "url": "https://www.axismaps.com/guide/proportional-symbol",
+    "guidance": "Use symbol area for quantity, preserve a visible outline where marks overlap, and label the places central to the story first. Treat site coordinates and estimated centroids as different kinds of evidence.",
+    "example": "Show a hospital network as sites only when locations are verified. County-wide totals use regional symbols with a legend explaining their placement."
+  },
+  {
+    "id": "relief-layout",
+    "appliesTo": ["terrain-flat"],
+    "source": "QGIS Documentation, Print Layout",
+    "url": "https://docs.qgis.org/3.40/en/docs/user_manual/print_layout/index.html",
+    "guidance": "Keep the source, elevation units, and orientation legible in the flat panel. Use hillshade to reveal landforms without letting shadows overpower elevation colours.",
+    "example": "Pair a restrained elevation ramp and north-up plan with a separate oblique image. Readers can locate forms on the plan and understand their shape in the scene."
+  },
+  {
+    "id": "relief-camera",
+    "appliesTo": ["terrain-3d"],
+    "source": "Blender 4.3 Manual, Cameras",
+    "url": "https://docs.blender.org/manual/en/4.3/render/cameras.html",
+    "guidance": "An orthographic view provides a useful alternative when perspective draws too much attention to the foreground. Select an angle that exposes the landforms relevant to the brief, and disclose any vertical exaggeration.",
+    "example": "Compare a lower view that emphasizes ridgelines with a higher view that reveals valley connections. Use a higher view when foreground terrain hides the relationship under discussion."
+  }
+]
