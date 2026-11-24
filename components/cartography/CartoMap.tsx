@@ -21,11 +21,11 @@ import {
   mainParts,
   type CountryFeature,
 } from "@/lib/cartography/geo";
-import { chooseJoin, type Subdivisions } from "@/lib/cartography/join";
+import { chooseJoin, joinValues, type RegionJoin, type Subdivisions } from "@/lib/cartography/join";
 import { loadAtlasLayers, type AtlasLayers } from "@/lib/cartography/atlas";
 import { placeAtlasLabels, type MapLabel } from "@/lib/cartography/labels";
 import { renderRelief, TERRAIN_ATTRIBUTION, type ReliefImages, type ReliefMode } from "@/lib/cartography/relief";
-import type { Row } from "@/lib/data/parse";
+import { asCoordinate, asNumber, type Row } from "@/lib/data/parse";
 
 // Restrained, paper-and-ink palette, the quiet base a cartographer builds on.
 const THEME = {
@@ -199,15 +199,6 @@ type LegendModel = { title: string[]; w: number; h: number } & (
   | { kind: "symbols"; rowH: number; rows: { color: string; r: number; label: string }[] }
 );
 
-function num(v: unknown): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string") {
-    const n = Number(v.replace(/[, ]/g, ""));
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
 /** Rough text width, good enough to size boxes without a DOM (works server-side and in PDF). */
 const textW = (s: string, size: number, bold = false) => s.length * size * (bold ? 0.58 : 0.54);
 
@@ -280,7 +271,12 @@ function buildMap(
   const isSymbolMap = SYMBOL_TYPES.has(spec.mapType);
   const isFootprint = spec.mapType === "footprint";
   const isReference = spec.mapType === "reference";
-  const margin = 20 * k;
+  const margin = (spec.page.layout === "report" ? 27 : 21) * k;
+  const large = spec.typography?.scale === "large";
+  const textScale = large ? 1.2 : 1;
+  const pointLabelSize = 11 * k * textScale;
+  const legendTextScale = k * textScale;
+  const headerLayout = spec.page.layout ?? "centered";
 
   // ── Data join ──
   const nameIndex = buildNameIndex(geo);
@@ -294,14 +290,13 @@ function buildMap(
     (ft) => !isWorld || normalizeName(ft.properties.name) !== "antarctica",
   );
 
-  const rawPoints = isSymbolMap ? extractPoints(spec, data, nameIndex) : [];
-
   // Region maps join place names to whichever boundaries they name: countries, or the
   // focus country's provinces/districts (a province table must not render as "No data").
   const isChoropleth = !isSymbolMap && !isFootprint && Boolean(spec.data.valueField && spec.data.nameField);
   const isRegionMap = (isChoropleth || isFootprint) && Boolean(spec.data.nameField);
   const subs = focusFeature ? subdivisions : undefined;
-  const join = isRegionMap
+  const regionSymbols = isSymbolMap && Boolean(spec.data.nameField) && !(spec.data.latField && spec.data.lonField);
+  const join = isRegionMap || regionSymbols
     ? chooseJoin(
         data.map((r) => r[spec.data.nameField!]).filter((v) => v != null).map(String),
         geo,
@@ -309,28 +304,25 @@ function buildMap(
         level,
       )
     : null;
+  const rawPoints = isSymbolMap ? extractPoints(spec, data, nameIndex, regionSymbols ? join : null) : [];
   // A reference plate draws the units themselves: the provinces (or districts) of its country.
   const referenceUnits: CountryFeature[] =
     isReference && subs ? (((level === "admin2" ? subs.adm2 : subs.adm1)?.features ?? []) as CountryFeature[]) : [];
-  const regionUnits: CountryFeature[] = join && join.level !== "country" ? join.features : referenceUnits;
+  const regionUnits: CountryFeature[] = isRegionMap && join && join.level !== "country" ? join.features : referenceUnits;
   const joinable: CountryFeature[] = join?.level === "country" ? drawn : regionUnits;
   const keyOf = (ft: CountryFeature) => join?.keyOf(ft) ?? "";
 
   const footprintMatched = new Set<string>();
   const footprintFeatures: CountryFeature[] = [];
-  const valueByKey = new Map<string, number>();
-  if (join) {
+  const valueByKey = isChoropleth && join
+    ? joinValues(data, join, spec.data.nameField!, spec.data.valueField!).values
+    : new Map<string, number>();
+  if (isFootprint && join) {
     for (const row of data) {
-      const nm = row[spec.data.nameField!];
-      if (nm == null) continue;
-      const ft = join.match(String(nm));
-      if (!ft) continue;
-      if (isFootprint && !footprintMatched.has(keyOf(ft))) {
-        footprintMatched.add(keyOf(ft));
-        footprintFeatures.push(ft);
-      }
-      const v = isChoropleth ? num(row[spec.data.valueField!]) : null;
-      if (v !== null) valueByKey.set(keyOf(ft), v);
+      const ft = join.match(String(row[spec.data.nameField!] ?? ""));
+      if (!ft || footprintMatched.has(keyOf(ft))) continue;
+      footprintMatched.add(keyOf(ft));
+      footprintFeatures.push(ft);
     }
   }
   const usesSubdivisions = Boolean(regionUnits.length || subs?.adm1);
@@ -359,7 +351,7 @@ function buildMap(
 
   // ── Classification / symbol scale (independent of the projection) ──
   let classes: { breaks: number[]; colors: string[] } | null = null;
-  if (isChoropleth) {
+  if (isChoropleth && valueByKey.size) {
     const br = classify([...valueByKey.values()], spec.symbology.classification, spec.symbology.classes);
     let colors = getPaletteColors(spec.symbology.palette, br.classes, spec.symbology.reverse).slice(0, br.classes);
     // Dots on paper: the palest shades disappear, so start the ramp two steps in.
@@ -404,32 +396,33 @@ function buildMap(
   const legend = f.legend ? buildLegend() : null;
 
   function buildLegend(): LegendModel | null {
+    const k = legendTextScale;
     const pad = 9 * k;
-    const titleSize = 10.5 * k;
-    const labelSize = 9 * k;
+    const titleSize = 13 * k;
+    const labelSize = 12 * k;
     const titleText = (fallback: string) => wrapText(spec.data.valueLabel || fallback, 30, 2);
     const box = (title: string[], contentW: number, contentH: number) => ({
       w: pad * 2 + Math.max(contentW, ...title.map((t) => textW(t, titleSize, true))),
       h: pad * 2 + title.length * titleSize * 1.2 + 5 * k + contentH,
     });
 
-    if (isChoropleth && classes) {
-      const rows = classes.colors.map((color, i) => ({
+    if (isChoropleth) {
+      const rows = (classes?.colors ?? []).map((color, i) => ({
         color,
         label:
-          classes!.colors.length === 1
-            ? formatNumber(classes!.breaks[0], spec.data.valueFormat)
-            : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} to ${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
+          classes!.breaks[i] === classes!.breaks[i + 1]
+            ? formatNumber(classes!.breaks[i], spec.data.valueFormat)
+            : `${formatNumber(classes!.breaks[i], spec.data.valueFormat)} to ${i < classes!.colors.length - 1 ? "under " : ""}${formatNumber(classes!.breaks[i + 1], spec.data.valueFormat)}`,
       }));
-      if (hasNoData) rows.push({ color: T.noData, label: "No data", muted: true } as (typeof rows)[number]);
+      if (hasNoData || !classes) rows.push({ color: T.noData, label: "No data", muted: true } as (typeof rows)[number]);
       const title = titleText("Value");
       const labelW = Math.max(...rows.map((r) => textW(r.label, labelSize)));
-      return { kind: "classes", title, rows, ...box(title, 14 * k + 7 * k + labelW, rows.length * 15 * k - 3 * k) };
+      return { kind: "classes", title, rows, ...box(title, 14 * k + 7 * k + labelW, rows.length * 17 * k - 3 * k) };
     }
 
     if (isFootprint) {
       const title = titleText("Legend");
-      const label = spec.data.valueLabel ? "Included" : "Where we work";
+      const label = "Included places";
       const accent = getPaletteColors(spec.symbology.palette, 5, false)[3];
       const rows = [{ color: accent, label }];
       return {
@@ -458,7 +451,7 @@ function buildMap(
     }
 
     const r = Math.max(pointR, 3.5 * k);
-    const rowH = Math.max(15 * k, 2 * r + 5 * k);
+    const rowH = Math.max(17 * k, 2 * r + 5 * k);
     if (categorical && cats.length === 1 && /^(other|category|type|)$/i.test(cats[0].trim())) return null;
     if (categorical) {
       const title = wrapText(spec.data.valueLabel || categoryTitle(spec.data.categoryField), 30, 2);
@@ -474,28 +467,36 @@ function buildMap(
   }
 
   // ── Header (title block + logo) ──
-  const titleSize = 22 * k;
+  const titleSize = (headerLayout === "feature" ? 36 : headerLayout === "report" ? 25 : 30) * k * textScale;
+  const subtitleSize = 13 * k * textScale;
+  const orgSize = 11 * k * textScale;
   const logoSize = b.logoDataUrl ? 46 * k : 0;
-  const titleMaxW = W - 2 * margin - (logoSize ? 2 * (logoSize + 14 * k) : 0);
-  const titleLines = f.title ? wrapText(spec.title, Math.max(12, Math.floor(titleMaxW / (titleSize * 0.47))), 2) : [];
-  const header: { text: string; y: number; kind: "title" | "subtitle" | "org" }[] = [];
-  let cursor = 0;
+  const headerX = headerLayout === "centered" ? W / 2 : margin;
+  const titleMaxW = W - 2 * margin - (logoSize ? (headerLayout === "centered" ? 2 : 1) * (logoSize + 14 * k) : 0);
+  const charsAt = (size: number) => Math.max(12, Math.floor(titleMaxW / (size * 0.56)));
+  const titleLines = f.title ? wrapText(spec.title, charsAt(titleSize), 2) : [];
+  const header: { text: string; y: number; size: number; kind: "title" | "subtitle" | "org" }[] = [];
+  let cursor = headerLayout === "feature" && titleLines.length ? 9 * k : 0;
   titleLines.forEach((t, i) => {
     cursor += i === 0 ? titleSize * 0.82 : titleSize * 1.12;
-    header.push({ text: t, y: cursor, kind: "title" });
+    header.push({ text: t, y: cursor, size: titleSize, kind: "title" });
   });
   if (f.title && spec.subtitle) {
-    cursor += 17 * k;
-    header.push({ text: spec.subtitle, y: cursor, kind: "subtitle" });
+    for (const line of wrapText(spec.subtitle, charsAt(subtitleSize), 2)) {
+      cursor += subtitleSize * 1.35;
+      header.push({ text: line, y: cursor, size: subtitleSize, kind: "subtitle" });
+    }
   }
   if (f.title && b.organisation) {
-    cursor += 15 * k;
-    header.push({ text: b.organisation, y: cursor, kind: "org" });
+    cursor += orgSize * 1.4;
+    for (const line of wrapText(b.organisation, charsAt(orgSize), 1)) {
+      header.push({ text: line, y: cursor, size: orgSize, kind: "org" });
+    }
   }
   const headerH = Math.max(cursor ? cursor + 12 * k : 0, logoSize ? logoSize + 10 * k : 0);
 
   // ── Footer (caption, notes, source) ──
-  const footSize = 8.5 * k;
+  const footSize = 12 * k * textScale;
   const footMaxChars = Math.floor((W - 2 * margin) / (footSize * 0.54));
   const footer: { text: string; muted?: boolean }[] = [];
   if (f.caption && spec.caption) wrapText(spec.caption, footMaxChars, 2).forEach((t) => footer.push({ text: t }));
@@ -504,13 +505,19 @@ function buildMap(
     let source = spec.source || "Boundaries: Natural Earth · Made with CartoMapper";
     if (usesSubdivisions && !/geoboundaries/i.test(source)) source += " · Subdivisions: geoBoundaries (CC BY 4.0)";
     if (style === "atlas" && !/terrain/i.test(source)) source += ` · ${TERRAIN_ATTRIBUTION}`;
-    footer.push({ text: source, muted: true });
+    wrapText(source, footMaxChars, 3).forEach((text) => footer.push({ text, muted: true }));
   }
+  if (spec.data.illustrative) footer.unshift({ text: "Illustrative data" });
   const footLine = footSize * 1.35;
   const footerH = footer.length ? 8 * k + footer.length * footLine : 0;
 
   // ── Map frame + projection ──
   let frame: Rect = { x: margin, y: margin + headerH, w: W - 2 * margin, h: H - 2 * margin - headerH - footerH };
+  // A report has room for a separate legend column on wide pages.
+  const legendGutter = 14 * k;
+  const legendAside = headerLayout === "report" && legend && W >= H &&
+    legend.w + legendGutter < frame.w * 0.38 && legend.h <= frame.h;
+  if (legendAside && legend) frame = { ...frame, w: frame.w - legend.w - legendGutter };
   const insetOf = (fr: Rect) => (isWorld ? 5 * k : Math.max(10 * k, 0.05 * Math.min(fr.w, fr.h)));
   const extentOf = (fr: Rect): Extent => [
     [fr.x + insetOf(fr), fr.y + insetOf(fr)],
@@ -528,7 +535,7 @@ function buildMap(
     const excess = frame.h - tight;
     // Only worth it on tall pages; on landscape the globe simply sits centred in its frame.
     if (excess > 0.25 * frame.h) {
-      legendBelow = Boolean(legend && excess >= legend.h + 12 * k);
+      legendBelow = Boolean(legend && !legendAside && excess >= legend.h + 12 * k);
       frame = { ...frame, h: tight };
       projection = fit(extentOf(frame));
     }
@@ -554,7 +561,9 @@ function buildMap(
   const cornerPad = 8 * k;
   let legendRect: Rect | null = null;
   let legendCorner: Corner | null = null;
-  if (legend && legendBelow) {
+  if (legend && legendAside) {
+    legendRect = { x: frame.x + frame.w + legendGutter, y: frame.y, w: legend.w, h: legend.h };
+  } else if (legend && legendBelow) {
     legendRect = { x: frame.x, y: frame.y + frame.h + 12 * k, w: legend.w, h: legend.h };
   } else if (legend) {
     const weighted: { f: GeoPermissibleObjects; w: number }[] = [];
@@ -630,6 +639,13 @@ function buildMap(
   const isDataUnit = (ft: CountryFeature) =>
     Boolean(join) && (valueByKey.has(keyOf(ft)) || footprintMatched.has(keyOf(ft)));
 
+  const tooltip = (ft: CountryFeature) => {
+    const name = ft.properties.name;
+    if (!isChoropleth) return name;
+    const value = valueByKey.get(keyOf(ft));
+    return `${name} · ${value === undefined ? "No data" : formatNumber(value, spec.data.valueFormat)}`;
+  };
+
   // Each unit carries two fills: a vector one, and the one used once relief has loaded
   // (transparent, so the terrain shows; neighbours washed back behind the focus).
   const units = drawn.map((ft) => {
@@ -658,7 +674,7 @@ function buildMap(
       fill = T.pastels ? T.pastels[(ft.properties.mapcolor ?? 0) % T.pastels.length] : T.land;
       reliefFill = "none";
     }
-    return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill, stroke, name: ft.properties.name, data: isDataUnit(ft) };
+    return { d: pathOf(ft as unknown as GeoPermissibleObjects), fill, reliefFill, stroke, name: countryLevelJoin ? tooltip(ft) : ft.properties.name, data: isDataUnit(ft) };
   });
   // Provinces/districts the data is joined to, drawn over their country.
   const regions = regionUnits.map((ft) => {
@@ -671,7 +687,7 @@ function buildMap(
       d: pathOf(ft as unknown as GeoPermissibleObjects),
       fill: regionFill(ft),
       reliefFill: isChoropleth || isDataUnit(ft) ? regionFill(ft) : "none",
-      name: ft.properties.name,
+      name: tooltip(ft),
     };
   });
   // Province lines for context: on locator/symbol maps, and over district shading.
@@ -732,8 +748,8 @@ function buildMap(
 
   // ── Point labels (locator maps) ──
   const labels =
-    spec.mapType === "point" && symbols.length <= 40
-      ? placeLabels(symbols, 8.5 * k, frame, [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null), k)
+    spec.mapType !== "dot" && symbols.length <= (spec.mapType === "point" ? 40 : 16)
+      ? placeLabels(symbols, pointLabelSize, frame, [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null), k)
       : [];
 
   // Reference plates name every unit, largest first, in spaced capitals (districts in
@@ -743,8 +759,8 @@ function buildMap(
   if (nameUnits && f.labels && regionUnits.length) {
     const blocked: Rect[] = [legendRect, northRect, scaleRect].filter((r): r is Rect => r !== null);
     const adm2 = level === "admin2";
-    const base = (adm2 ? 6.4 : 8.2) * k;
-    const spacing = adm2 ? 0.02 : 0.1;
+    const base = (adm2 ? 10 : 12) * k * textScale;
+    const spacing = 0.015;
     const inner: Rect = { x: frame.x + 4 * k, y: frame.y + 4 * k, w: frame.w - 8 * k, h: frame.h - 8 * k };
     const within = (r: Rect) => r.x >= inner.x && r.y >= inner.y && r.x + r.w <= inner.x + inner.w && r.y + r.h <= inner.y + inner.h;
     const sorted = regionUnits
@@ -758,8 +774,8 @@ function buildMap(
       const xy = at && projection(at);
       if (!xy) continue;
       const [[bx0, by0], [bx1, by1]] = path.bounds(main as unknown as GeoPermissibleObjects);
-      const text = adm2 ? name : name.toUpperCase();
-      for (const size of [base, base * 0.86, base * 0.74]) {
+      const text = name;
+      for (const size of [base, Math.max(9.5 * k * textScale, base * 0.9)]) {
         const lines = text.length > 11 && text.includes(" ") ? splitTwo(text) : [text];
         const w = Math.max(...lines.map((l) => l.length * size * (0.6 + spacing)));
         const h = lines.length * size * 1.12;
@@ -788,16 +804,16 @@ function buildMap(
 
   // Atlas reference labels: countries, cities, seas, lakes, peaks, regions.
   const pointLabelBoxes: Rect[] = labels.map((l) => {
-    const w = textW(l.text, 8.5 * k);
+    const w = textW(l.text, pointLabelSize);
     const x = l.anchor === "start" ? l.x : l.anchor === "end" ? l.x - w : l.x - w / 2;
-    return { x, y: l.y - 8.5 * k * 0.9, w, h: 8.5 * k * 1.2 };
+    return { x, y: l.y - pointLabelSize * 0.9, w, h: pointLabelSize * 1.2 };
   });
   const atlasLabels: MapLabel[] =
     style !== "minimal" && T.refLabels !== false && f.labels
       ? placeAtlasLabels({
           projection,
           frame,
-          k,
+          k: k * textScale,
           level,
           countries: drawn,
           focus: focusFeature,
@@ -814,6 +830,10 @@ function buildMap(
   return {
     k,
     margin,
+    headerX,
+    headerLayout,
+    pointLabelSize,
+    legendTextScale,
     header: header.map((h) => ({ ...h, y: h.y + margin })),
     logo: logoSize ? { x: W - margin - logoSize, y: margin, size: logoSize } : null,
     footer: footer.map((l, i) => ({ ...l, y: footerTop + 8 * k + (i + 0.8) * footLine })),
@@ -895,19 +915,22 @@ function placeLabels(symbols: Sym[], size: number, frame: Rect, obstacles: Rect[
   return out;
 }
 
-function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, CountryFeature>) {
+function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, CountryFeature>, join: RegionJoin | null) {
   const { latField, lonField, valueField, categoryField, nameField } = spec.data;
+  const measured = spec.mapType === "proportional_symbol" || spec.mapType === "graduated_symbol";
   const out: { lat: number; lon: number; value: number; category?: string; name?: string }[] = [];
 
   if (latField && lonField) {
     for (const r of data) {
-      const lat = num(r[latField]);
-      const lon = num(r[lonField]);
+      const lat = asCoordinate(r[latField]);
+      const lon = asCoordinate(r[lonField]);
       if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+      const value = measured && valueField ? asNumber(r[valueField]) : 1;
+      if (value === null) continue;
       out.push({
         lat,
         lon,
-        value: valueField ? num(r[valueField]) ?? 1 : 1,
+        value,
         category: categoryField ? String(r[categoryField] ?? "") : undefined,
         name: nameField ? String(r[nameField] ?? "") : undefined,
       });
@@ -915,18 +938,24 @@ function extractPoints(spec: MapSpec, data: Row[], nameIndex: Map<string, Countr
     return out;
   }
 
-  // No coordinates → place at matched-country centroids.
+  // Named areas are located at representative boundary points.
   if (nameField) {
+    const values = measured && valueField && join ? joinValues(data, join, nameField, valueField).values : null;
+    const plotted = new Set<string>();
     for (const r of data) {
       const nm = r[nameField];
       if (nm == null) continue;
-      const ft = matchFeature(String(nm), nameIndex);
+      const ft = join ? join.match(String(nm)) : matchFeature(String(nm), nameIndex);
       if (!ft) continue;
+      const key = join?.keyOf(ft) ?? ft.properties.name;
+      const value = measured && valueField ? values ? values.get(key) : asNumber(r[valueField]) : 1;
+      if (value == null || (values && plotted.has(key))) continue;
+      plotted.add(key);
       const [lon, lat] = centroidOf(ft as unknown as Feature);
       out.push({
         lat,
         lon,
-        value: valueField ? num(r[valueField]) ?? 1 : 1,
+        value,
         category: categoryField ? String(r[categoryField] ?? "") : undefined,
         name: String(nm),
       });
@@ -1223,7 +1252,7 @@ export function CartoMap({
           <AtlasLabel key={`a${i}`} label={l} k={k} serif={serif} sans={sans} dark={dark} />
         ))}
         {m.labels.map((l, i) => (
-          <g key={`l${i}`} fontSize={8.5 * k} style={{ fontFamily: sans }} fontWeight={600}>
+          <g key={`l${i}`} fontSize={m.pointLabelSize} style={{ fontFamily: sans }} fontWeight={600}>
             <text x={l.x} y={l.y} textAnchor={l.anchor} fill="none" stroke={T.paper} strokeWidth={2.6 * k} strokeLinejoin="round" strokeOpacity={0.9}>
               {l.text}
             </text>
@@ -1249,14 +1278,18 @@ export function CartoMap({
       )}
 
       {/* ── Title block ── */}
+      {m.header.length > 0 && m.headerLayout === "feature" &&
+        <rect x={m.margin} y={m.margin} width={50 * k} height={3.5 * k} fill={getPaletteColors(spec.symbology.palette, 5)[3]} />}
+      {m.header.length > 0 && m.headerLayout === "report" &&
+        <line x1={m.margin} x2={width - m.margin} y1={frame.y - 4 * k} y2={frame.y - 4 * k} stroke={c.panelBorder} />}
       {m.header.map((h, i) => (
         <text
           key={`h${i}`}
-          x={width / 2}
+          x={m.headerX}
           y={h.y}
-          textAnchor="middle"
+          textAnchor={m.headerLayout === "centered" ? "middle" : "start"}
           style={{ fontFamily: h.kind === "title" ? serif : sans }}
-          fontSize={(h.kind === "title" ? 22 : h.kind === "subtitle" ? 11.5 : 9) * k}
+          fontSize={h.size}
           fontWeight={h.kind === "subtitle" ? 400 : 700}
           fill={h.kind === "title" ? c.ink : c.muted}
         >
@@ -1277,7 +1310,7 @@ export function CartoMap({
       {m.northRect && <NorthArrow rect={m.northRect} k={k} c={c} />}
       {m.scalebar && m.scaleRect && <ScaleBarMark rect={m.scaleRect} bar={m.scalebar} k={k} sans={sans} c={c} />}
       {m.legend && m.legendRect && (
-        <Legend model={m.legend} rect={m.legendRect} k={k} serif={serif} sans={sans} c={c} boxed={!m.isWorld || m.legendRect.y < frame.y + frame.h} />
+        <Legend model={m.legend} rect={m.legendRect} k={m.legendTextScale} serif={serif} sans={sans} c={c} boxed={!m.isWorld || m.legendRect.y < frame.y + frame.h} />
       )}
 
       {/* ── Footer ── */}
@@ -1407,8 +1440,8 @@ function Legend({
   c: Ink;
 }) {
   const pad = 9 * k;
-  const titleSize = 10.5 * k;
-  const labelSize = 9 * k;
+  const titleSize = 13 * k;
+  const labelSize = 12 * k;
   const top = pad + model.title.length * titleSize * 1.2 + (model.title.length ? 5 * k : 0);
   return (
     <g transform={`translate(${rect.x},${rect.y})`}>
@@ -1431,9 +1464,9 @@ function Legend({
       <g style={{ fontFamily: sans }} fontSize={labelSize}>
         {model.kind === "classes" &&
           model.rows.map((r, i) => (
-            <g key={i} transform={`translate(${pad},${top + i * 15 * k})`}>
+            <g key={i} transform={`translate(${pad},${top + i * 17 * k})`}>
               <rect width={14 * k} height={10 * k} fill={r.color} stroke={c.panelBorder} strokeWidth={0.5 * k} />
-              <text x={21 * k} y={8.5 * k} fill={r.muted ? c.muted : c.ink}>
+              <text x={21 * k} y={10 * k} fill={r.muted ? c.muted : c.ink}>
                 {r.label}
               </text>
             </g>

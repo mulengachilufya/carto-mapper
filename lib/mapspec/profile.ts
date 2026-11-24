@@ -35,7 +35,11 @@ export function profileTable(table: ParsedTable, roles: ColumnRoles): DataProfil
   const profile: DataProfile = { rows: table.rowCount, columns: table.columns, roles };
 
   if (roles.valueField) {
-    const vals = table.rows.map((r) => asNumber(r[roles.valueField!])).filter((n): n is number => n !== null);
+    const cells = table.rows.map((r) => r[roles.valueField!]).filter((cell) => asNumber(cell) !== null);
+    const vals = cells.map((cell) => asNumber(cell)!);
+    const explicitPercent = /%|\b(?:pct|percent(?:age)?)\b/i.test(roles.valueField.replace(/_/g, " "))
+      || (cells.length > 0 && cells.every((cell) => typeof cell === "string" && /%\s*$/.test(cell)));
+    const explicitFraction = /\b(?:fraction|proportion|0 to 1)\b/i.test(roles.valueField.replace(/_/g, " "));
     if (vals.length) {
       const sorted = [...vals].sort((a, b) => a - b);
       const n = sorted.length;
@@ -61,7 +65,7 @@ export function profileTable(table: ParsedTable, roles: ColumnRoles): DataProfil
         zeros: sorted.filter((v) => v === 0).length,
         negatives: sorted.filter((v) => v < 0).length,
         positives: sorted.filter((v) => v > 0).length,
-        looksLikeShare: min >= 0 && max <= 1 && sorted.some((v) => v % 1 !== 0) ? "fraction" : min >= 0 && max <= 100 && /pct|percent|share|rate|%/i.test(roles.valueField) ? "percent" : null,
+        looksLikeShare: explicitPercent ? "percent" : explicitFraction && min >= 0 && max <= 1 ? "fraction" : null,
         outliers,
       };
     }

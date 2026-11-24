@@ -69,6 +69,9 @@ export function applyRevisionHeuristic(prev: MapSpec, request: string): MapSpec 
   }
   if (/diverging|red.?blue/.test(t)) next.symbology = { ...next.symbology, palette: "RdBu", paletteKind: "diverging" };
   if (/portrait/.test(t)) next.page = { ...next.page, orientation: "portrait" };
+  const layout = t.match(/\b(feature|report|atlas|centered) layout\b/)?.[1];
+  if (layout === "feature" || layout === "report") next.page.layout = layout;
+  if (layout === "atlas" || layout === "centered") next.page.layout = "centered";
   if (/landscape/.test(t)) next.page = { ...next.page, orientation: "landscape" };
   if (/more class|more colou?rs|more bucket/.test(t))
     next.symbology = { ...next.symbology, classes: Math.min(9, next.symbology.classes + 1) };

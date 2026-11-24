@@ -10,12 +10,14 @@ import {
   CLASSIFICATIONS,
   PALETTE_KINDS,
   ORIENTATIONS,
+  MAP_LAYOUTS,
 } from "./schema";
 import { PALETTES_BY_KIND } from "@/lib/cartography/palettes";
 import type { GenerateInput } from "./generate";
 import { profileTable } from "./profile";
 import type { Decision as LogEntry } from "./schema";
 import type { Brief } from "@/lib/engine/brief";
+import { flatMapReferences } from "@/lib/design/references";
 
 const MODEL = "claude-opus-5";
 // If Claude Opus 5's safety classifiers decline a brief, the API re-runs it on this
@@ -64,6 +66,7 @@ const Decision = z.object({
   classes: z.number().int().describe("3 to 7; fewer when the data has few distinct values."),
   classification: z.enum(CLASSIFICATIONS),
   orientation: z.enum(ORIENTATIONS),
+  layout: z.enum(MAP_LAYOUTS).describe("Feature for storytelling and slides, report for a document, centered for an atlas plate."),
   furniture: z.object({
     legend: z.boolean(),
     scalebar: z.boolean(),
@@ -97,7 +100,10 @@ export async function generateMapSpecWithClaude(input: GenerateInput, revision: 
     fallbacks: [{ model: FALLBACK_MODEL }],
     thinking: { type: "adaptive" },
     output_config: { effort: "medium", format: betaZodOutputFormat(Decision) },
-    system: SYSTEM_PROMPT,
+    system: `${SYSTEM_PROMPT}
+
+CartoMapper's design references (examples teach choices, never supply case-specific facts):
+${flatMapReferences(revision?.previousSpec?.mapType ?? baseline.spec.mapType)}`,
     messages: [{ role: "user", content: buildBrief(input, revision, baseline) }],
   });
 
@@ -134,8 +140,8 @@ function applyDecision(base: MapSpec, d: DecisionT): MapSpec {
     geography: { ...base.geography, level: d.level, region: d.region.trim() || base.geography.region },
     data: {
       ...base.data,
-      valueLabel: d.valueLabel.trim() || base.data.valueLabel,
-      valueFormat: d.valueFormat.trim() || base.data.valueFormat,
+      valueLabel: base.data.valueField ? base.data.valueLabel : d.valueLabel.trim() || base.data.valueLabel,
+      valueFormat: base.data.valueFormat,
     },
     symbology: {
       ...base.symbology,
@@ -146,7 +152,7 @@ function applyDecision(base: MapSpec, d: DecisionT): MapSpec {
       classification: d.classification,
     },
     furniture: { ...base.furniture, ...d.furniture },
-    page: { ...base.page, orientation: d.orientation },
+    page: { ...base.page, orientation: d.orientation, layout: d.layout },
     notes: [d.rationale.story, d.rationale.mapType, d.rationale.classification, d.rationale.colour, d.rationale.style]
       .filter(Boolean)
       .join(" "),
@@ -168,6 +174,7 @@ What the renderer can draw (so design for it):
   • atlas: physical relief, rivers and peaks. ONLY when the customer asks for a physical, terrain, relief or topographic map. Never for data maps otherwise: rivers and terrain distract from the data.
   • classic: political pastels. Only when asked for a political or school-atlas look.
   • minimal: paper and ink. Only for academic journals or when asked for plain/monochrome.
+- Page composition: feature uses a large, left-aligned headline and accent; report uses a restrained left-aligned header and rule; centered uses an atlas-style title. Choose according to the medium.
 - Furniture: legend, scale bar, north arrow, graticule, place-name labels, title, subtitle, source line.
 
 How to decide:
@@ -175,7 +182,7 @@ How to decide:
 - Values that cross zero around a meaningful midpoint (change, growth, balance) → diverging palette. One-directional quantities → sequential. Categories → qualitative.
 - Skewed data (|skewness| > 1, or outliers) → quantile or natural breaks (jenks); evenly spread data → equal_interval. Never use more classes than the data has distinct values; 5 is typical, 3 or 4 for small tables.
 - Counts at sites (patients, sales, beneficiaries) → proportional symbols, not a choropleth. Rates and shares over regions → choropleth. Raw counts over regions of very different size mislead as a choropleth; say so in the rationale and prefer proportional symbols at the region centres unless the customer insists.
-- Shares stored as fractions (0 to 1) format as ".0%"; percentages stored 0 to 100 need a "%" in the legend label instead.
+- Only interpret a fraction as a percent with explicit unit evidence. Keep the baseline legend unit and numeric format.
 - World and continent maps: graticule on, no scale bar (scale varies across them), no north arrow on world maps. Country and smaller: scale bar and a discreet north arrow, no graticule. Place names on, unless a dense choropleth of many small regions would be cluttered.
 - Portrait suits tall places (Chile, Japan, Malawi, Norway) and report pages; landscape suits wide ones and the world.
 - Titles are plain, third-person statements of what and where, the way an atlas or a statistics office titles a map: "Public Universities in Zambia, 2026", "Household Access to Piped Water by County, Kenya", "Median Home Value by State, United States". Never a question, never marketing, never "Map of", "Map showing", "Where X are", "Explore", possessives like "Zambia's", or "you/our". If the customer gave a title, use it exactly. Put units and "illustrative data" in the subtitle.
@@ -215,7 +222,7 @@ function buildBrief(input: GenerateInput, revision: RevisionContext | undefined,
     parts.push(`Data profile (computed from all ${profile.rows} rows):\n${JSON.stringify(profile, null, 1)}`);
     parts.push(`Sample rows:\n${JSON.stringify(table.rows.slice(0, 12))}`);
   } else {
-    parts.push("No data table was provided; the map will use illustrative sample data; design for the described subject.");
+    parts.push("No data table was provided. Design only for the baseline reference boundaries or the explicit places listed in the brief.");
   }
 
   if (revision?.revisionRequest && revision.previousSpec) {
@@ -244,6 +251,7 @@ function summarise(s: MapSpec) {
     classes: s.symbology.classes,
     classification: s.symbology.classification,
     orientation: s.page.orientation,
+    layout: s.page.layout,
     furniture: s.furniture,
   };
 }

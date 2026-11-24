@@ -84,8 +84,10 @@ export function generateSample(
         ? (place.region ?? "Zambia")
         : undefined;
 
-  if (countryFocus) return pointSample(geo, countryFocus, industry);
-  return choroplethSample(geo, industry, place.level === "continent" ? place.region : undefined);
+  const sample = countryFocus
+    ? pointSample(geo, countryFocus, industry)
+    : choroplethSample(geo, industry, place.level === "continent" ? place.region : undefined);
+  return { ...sample, table: { ...sample.table, illustrative: true } };
 }
 
 function pointSample(geo: FeatureCollection, countryName: string, industry: string): SampleResult {

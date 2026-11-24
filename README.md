@@ -69,3 +69,8 @@ lib/
 public/geodata/          Natural Earth countries (TopoJSON)
 supabase/schema.sql      profiles + map_jobs (run in a new Supabase project)
 ```
+
+## Agent and terrain workflow
+
+See [CartoMapper agent](docs/cartomapper-agent.md) for evidence checks, design references,
+local QGIS and Blender rendering, and evaluation commands.

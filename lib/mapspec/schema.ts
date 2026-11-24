@@ -42,6 +42,7 @@ export const PALETTE_KINDS = ["sequential", "diverging", "qualitative"] as const
 export const CLASSIFICATIONS = ["quantile", "equal_interval", "jenks"] as const;
 export const PAGE_SIZES = ["A4", "Letter"] as const;
 export const ORIENTATIONS = ["portrait", "landscape"] as const;
+export const MAP_LAYOUTS = ["centered", "feature", "report"] as const;
 
 export const FurnitureSchema = z.object({
   title: z.boolean().default(true),
@@ -139,8 +140,9 @@ export const MapSpecSchema = z.object({
     .object({
       size: z.enum(PAGE_SIZES).default("A4"),
       orientation: z.enum(ORIENTATIONS).default("landscape"),
+      layout: z.enum(MAP_LAYOUTS).default("centered"),
     })
-    .default({ size: "A4", orientation: "landscape" }),
+    .prefault({ size: "A4", orientation: "landscape" }),
 
   // User branding, title is above; these sit on the map.
   branding: z
@@ -156,8 +158,9 @@ export const MapSpecSchema = z.object({
     .object({
       title: z.string().regex(FONT_NAME).catch(DEFAULT_MAP_FONT).default(DEFAULT_MAP_FONT),
       text: z.string().regex(FONT_NAME).catch(DEFAULT_MAP_FONT).default(DEFAULT_MAP_FONT),
+      scale: z.enum(["standard", "large"]).default("standard"),
     })
-    .default({ title: DEFAULT_MAP_FONT, text: DEFAULT_MAP_FONT }),
+    .prefault({ title: DEFAULT_MAP_FONT, text: DEFAULT_MAP_FONT }),
 
   notes: z.string().optional(), // human-readable rationale
 

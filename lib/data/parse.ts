@@ -8,6 +8,8 @@ export interface ParsedTable {
   columns: string[];
   rows: Row[];
   rowCount: number;
+  illustrative?: boolean;
+  locationSource?: "natural-earth-places";
 }
 
 export interface ColumnRoles {
@@ -99,6 +101,13 @@ export function asNumber(v: Cell | undefined): number | null {
   const mult = { k: 1e3, m: 1e6, mn: 1e6, b: 1e9, bn: 1e9 }[(m[2] ?? "").toLowerCase() as "k"] ?? 1;
   const n = Number(m[1]) * mult * sign;
   return Number.isFinite(n) ? n : null;
+}
+
+/** Coordinates accept plain decimal degrees, never display units or blank cells. */
+export function asCoordinate(value: Cell | undefined): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const text = value?.trim();
+  return text && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? Number(text) : null;
 }
 
 function numericShare(rows: Row[], col: string): number {

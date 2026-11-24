@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (accountsEnabled()) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "signin" }, { status: 401 });
-    if ((await getUsage(user.id)).remaining <= 0) return NextResponse.json({ places: [], pending: [], certain: [], checks: [], meta: {} });
+    if ((await getUsage(user.id)).remaining <= 0) return NextResponse.json({ places: [], checks: [], meta: {} });
   }
 
   let body: Record<string, unknown>;
@@ -23,15 +23,15 @@ export async function POST(req: Request) {
 
   const prompt = typeof body.prompt === "string" ? body.prompt : "";
   const files = Array.isArray(body.files)
-    ? (body.files as ContextFile[]).filter((f) => f && typeof f.dataBase64 === "string").slice(0, 6)
+    ? (body.files as ContextFile[]).filter((f) => f && typeof f.name === "string" && typeof f.mediaType === "string" && typeof f.dataBase64 === "string").slice(0, 6)
     : [];
 
   try {
     const result = await extractMapData(prompt, files);
-    return NextResponse.json(result ?? { places: [], pending: [], certain: [], checks: [], meta: {} });
+    return NextResponse.json(result ?? { places: [], checks: [], meta: {} });
   } catch (err) {
     console.error("extract error:", err);
     // Degrade gracefully, the flow continues with whatever the user provided.
-    return NextResponse.json({ places: [], pending: [], certain: [], checks: [], meta: {} });
+    return NextResponse.json({ places: [], checks: [], meta: {} });
   }
 }

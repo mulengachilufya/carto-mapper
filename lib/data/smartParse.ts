@@ -95,7 +95,7 @@ function table(columns: string[], rows: (string | number | null)[][]): ParsedTab
 
 /** Keep numbers as numbers so downstream code can classify them. */
 function typed(v: string | number | null): string | number | null {
-  if (v === null || typeof v === "number") return v;
+  if (v === null || typeof v === "number" || /%\s*$/.test(v)) return v;
   const n = asNumber(v);
   return n !== null && /\d/.test(v) && !/[a-z]{3,}/i.test(v) ? n : v;
 }
